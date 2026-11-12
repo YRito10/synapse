@@ -805,8 +805,6 @@
           </div>
           <p class="text-[11px] text-zinc-500">Compatible avec les clés Google AI Studio (AIzaSy...) et Google Cloud (AQ...).</p>
         </div>
-          <p class="text-[11px] text-zinc-500">Nécessaire uniquement lorsque l'application est hébergée sur GitHub pour activer la génération IA réelle.</p>
-        </div>
 
         <!-- Export / Import Local -->
         <div class="space-y-3">
@@ -887,60 +885,26 @@
         ],
         quizCorrectIndex: 0,
         dueInDays: 0
-      },
-      {
-        id: "note-2",
-        type: "book",
-        title: "Atomic Habits",
-        reference: "James Clear",
-        category: "Lectures",
-        subcategory: "Psychologie & Habitudes",
-        fullNotes: "🎯 EN BREF :\nPour ancrer une habitude durable, il faut faire évoluer son identité profonde plutôt que de fixer des objectifs chiffrés ponctuels.\n\n⚙️ COMMENT ÇA FONCTIONNE :\n• Rendre le déclencheur évident dans son environnement.\n• Rendre l'action tellement facile qu'il est impossible de procrastiner.\n\n💡 EXEMPLE CONCRET DU QUOTIDIEN :\nAu lieu de dire 'je veux lire 30 livres cette année', se dire 'je suis le genre de personne qui lit une page avant d'éteindre la lumière chaque soir'.\n\n⚠️ LE PIÈGE :\nCompter sur la seule motivation du matin, qui finit toujours par s'épuiser.",
-        punchline: "Tu ne t'élèves pas au niveau de tes objectifs, tu retombes au niveau de tes systèmes.",
-        question: "Pourquoi les résolutions chiffrées échouent-elles souvent selon James Clear ?",
-        questions: [
-          "Pourquoi les résolutions chiffrées échouent-elles souvent selon James Clear ?",
-          "Que signifie l'affirmation 'retomber au niveau de ses systèmes' ?",
-          "Quel exemple montre le passage de l'objectif à l'identité ?"
-        ],
-        quizOptions: [
-          "On vise le résultat final au lieu de concevoir un système quotidien",
-          "On manque de volonté naturelle",
-          "On lit trop lentement"
-        ],
-        quizCorrectIndex: 0,
-        dueInDays: 0
-      },
-      {
-        id: "note-3",
-        type: "book",
-        title: "Pensées pour moi-même",
-        reference: "Marc Aurèle",
-        category: "Lectures",
-        subcategory: "Philosophie Stoïcienne",
-        fullNotes: "🎯 EN BREF :\nDichotomie du contrôle : nos jugements, désirs et actions dépendent de nous. Les événements extérieurs, la météo et l'avis d'autrui n'en dépendent pas.\n\n⚙️ COMMENT ÇA FONCTIONNE :\n• Avant de réagir, se poser la question : 'Cela dépend-il de moi ?'.\n• Si non : y accorder une attention neutre et sans colère.\n\n💡 EXEMPLE CONCRET DU QUOTIDIEN :\nQuand ton train a 30 minutes de retard, tu ne peux pas faire rouler la rame plus vite. Tu peux en revanche choisir de lire une note sur Synapse plutôt que de t'énerver.\n\n⚠️ LA NUANCE :\nLe stoïcisme n'est pas de l'indifférence insensible, mais la maîtrise de son énergie mentale.",
-        punchline: "La paix de l'esprit s'obtient quand on refuse de dépenser de l'énergie pour ce qu'on ne peut pas contrôler.",
-        question: "Quel est le principe central de la dichotomie du contrôle ?",
-        questions: [
-          "Quel est le principe central de la dichotomie du contrôle ?",
-          "Que classe le stoïcisme dans ce qui ne dépend pas de nous ?",
-          "Quel exemple du quotidien illustre la bonne réaction face à un retard ?"
-        ],
-        quizOptions: [
-          "Distinguer strictement ce qui dépend de notre action de ce qui est hors de portée",
-          "Vouloir contrôler toutes les réactions de son entourage",
-          "Ne jamais rien ressentir"
-        ],
-        quizCorrectIndex: 0,
-        dueInDays: 0
       }
     ];
 
-    let taxonomy = JSON.parse(localStorage.getItem('synapse_taxonomy')) || DEFAULT_TAXONOMY;
-    let notes = JSON.parse(localStorage.getItem('synapse_notes')) || DEFAULT_NOTES;
+    const isInitialized = localStorage.getItem('synapse_initialized') === 'true';
+    let taxonomy = isInitialized && localStorage.getItem('synapse_taxonomy')
+      ? JSON.parse(localStorage.getItem('synapse_taxonomy'))
+      : DEFAULT_TAXONOMY;
+    let notes = isInitialized && localStorage.getItem('synapse_notes')
+      ? JSON.parse(localStorage.getItem('synapse_notes'))
+      : DEFAULT_NOTES;
+
+    if (!isInitialized) {
+      localStorage.setItem('synapse_initialized', 'true');
+      localStorage.setItem('synapse_taxonomy', JSON.stringify(taxonomy));
+      localStorage.setItem('synapse_notes', JSON.stringify(notes));
+    }
 
     function saveStateToStorage() {
       try {
+        localStorage.setItem('synapse_initialized', 'true');
         localStorage.setItem('synapse_taxonomy', JSON.stringify(taxonomy));
         localStorage.setItem('synapse_notes', JSON.stringify(notes));
       } catch (e) {
@@ -948,983 +912,13 @@
       }
 
       // Synchronisation Cloud automatique en arrière-plan
-      if (window.cloudSave) {
-        window.cloudSave(notes, taxonomy).then(success => {
-          if (success) {
-            updateCloudIndicator(true);
-          }
-        });
-      }
-    }
-
-    function updateCloudIndicator(isOnline) {
-      const dot = document.getElementById('cloud-status-dot');
-      const label = document.getElementById('cloud-status-label');
-      if (dot && label) {
-        if (isOnline) {
-          dot.className = "w-1.5 h-1.5 rounded-full bg-emerald-400";
-          label.innerText = "Cloud synchronisé";
-        } else {
-          dot.className = "w-1.5 h-1.5 rounded-full bg-amber-400";
-          label.innerText = "Local";
-        }
-      }
-    }
-
-    // Écoute de l'authentification et activation du Cloud
-    document.addEventListener('cloud-ready', (e) => {
-      const uid = e.detail?.uid;
-      const uidField = document.getElementById('sync-user-id-field');
-      if (uidField && uid) {
-        uidField.value = uid;
-      }
-      updateCloudIndicator(true);
-
-      // Écouter les mises à jour cloud en temps réel provenant des autres appareils
-      if (window.cloudListen) {
-        window.cloudListen((cloudData) => {
-          if (cloudData && cloudData.notes && cloudData.taxonomy) {
-            notes = cloudData.notes;
-            taxonomy = cloudData.taxonomy;
-            localStorage.setItem('synapse_taxonomy', JSON.stringify(taxonomy));
-            localStorage.setItem('synapse_notes', JSON.stringify(notes));
-            initCategoriesUI();
-            renderDashboard();
-            renderNotesList();
-          }
-        });
-      }
-    });
-
-    window.onload = function() {
-      initCategoriesUI();
-      renderTaxonomyFilters();
-      renderDashboard();
-      renderNotesList();
-      updateDueBadges();
-      loadGeminiApiKeyUI();
-    };
-
-    function getGeminiApiKey() {
-      return localStorage.getItem('synapse_gemini_api_key') || "";
-    }
-
-    function loadGeminiApiKeyUI() {
-      const input = document.getElementById('gemini-api-key-input');
-      if (input) {
-        input.value = getGeminiApiKey();
-      }
-    }
-
-    function saveGeminiApiKey() {
-      const input = document.getElementById('gemini-api-key-input');
-      if (!input) return;
-      const val = input.value.trim();
-      localStorage.setItem('synapse_gemini_api_key', val);
-      showToast(val ? "Clé API enregistrée et active ! ✨" : "Clé API supprimée.");
-    }
-
-    // Fonction universelle d'appel à Gemini (Compatible clés AIzaSy... et AQ...)
-    async function callGeminiJSON(promptText, schemaObj) {
-      const apiKey = getGeminiApiKey();
-      if (!apiKey) {
-        throw new Error("NO_API_KEY");
-      }
-
-      const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash"];
-      let lastError = null;
-
-      for (const modelName of modelsToTry) {
-        try {
-          const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
-          const payload = {
-            contents: [{ parts: [{ text: promptText }] }],
-            generationConfig: {
-              responseMimeType: "application/json",
-              responseSchema: schemaObj
-            }
-          };
-
-          const res = await fetch(apiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-
-          const data = await res.json();
-          if (!res.ok) {
-            lastError = data?.error?.message || `Erreur HTTP ${res.status}`;
-            continue;
-          }
-
-          const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (jsonText) {
-            return JSON.parse(jsonText);
-          }
-        } catch (err) {
-          lastError = err.message;
-        }
-      }
-
-      throw new Error(lastError || "Échec de l'appel IA");
-    }
-
-    function copySyncId() {
-      const field = document.getElementById('sync-user-id-field');
-      if (!field || !field.value) return;
-      field.select();
-      try {
-        document.execCommand('copy');
-        showToast("Identifiant copié !");
-      } catch (err) {
-        showToast("Impossible de copier.");
-      }
-    }
-
-    function startRandomEcho() {
-      if (notes.length === 0) return;
-      const randomNote = notes[Math.floor(Math.random() * notes.length)];
-      reviewSingleNote(randomNote.id);
-      showToast("Écho du passé : fiche sélectionnée au hasard ✨");
-    }
-
-    function rerollDailyPunchline() {
-      if (notes.length === 0) return;
-      const randomNote = notes[Math.floor(Math.random() * notes.length)];
-      document.getElementById('daily-punchline-text').innerText = `« ${randomNote.punchline} »`;
-      document.getElementById('daily-punchline-source').innerHTML = `${getSourceIcon(randomNote.type)} ${randomNote.reference || randomNote.title}`;
-      document.getElementById('daily-punchline-category').innerText = randomNote.category;
-    }
-
-    function copyCardPunchline(e) {
-      if (e) e.stopPropagation();
-      const text = document.getElementById('card-answer-punchline')?.innerText || '';
-      if (!text) return;
-
-      const tempInput = document.createElement('textarea');
-      tempInput.value = text;
-      document.body.appendChild(tempInput);
-      tempInput.select();
-      try {
-        document.execCommand('copy');
-        showToast("Punchline copiée !");
-      } catch (err) {
-        showToast("Impossible de copier.");
-      }
-      document.body.removeChild(tempInput);
-    }
-
-    function switchTab(tabId) {
-      currentTab = tabId;
-      
-      document.getElementById('view-dashboard').classList.toggle('hidden', tabId !== 'dashboard');
-      document.getElementById('view-review').classList.toggle('hidden', tabId !== 'review');
-      document.getElementById('view-notes').classList.toggle('hidden', tabId !== 'notes');
-
-      updateNavButtonState('nav-dashboard', tabId === 'dashboard');
-      updateNavButtonState('nav-review', tabId === 'review');
-      updateNavButtonState('nav-notes', tabId === 'notes');
-
-      const mDash = document.getElementById('mobile-nav-dashboard');
-      const mRev = document.getElementById('mobile-nav-review');
-      const mNot = document.getElementById('mobile-nav-notes');
-
-      if (mDash && mRev && mNot) {
-        mDash.className = tabId === 'dashboard' ? 'tap-target flex flex-col items-center justify-center w-14 text-brand-400' : 'tap-target flex flex-col items-center justify-center w-14 text-zinc-400';
-        mRev.className = tabId === 'review' ? 'tap-target relative flex flex-col items-center justify-center w-14 text-brand-400' : 'tap-target relative flex flex-col items-center justify-center w-14 text-zinc-400';
-        mNot.className = tabId === 'notes' ? 'tap-target flex flex-col items-center justify-center w-14 text-brand-400' : 'tap-target flex flex-col items-center justify-center w-14 text-zinc-400';
-      }
-
-      const hTitle = document.getElementById('header-title');
-      const hSub = document.getElementById('header-subtitle');
-      if (tabId === 'dashboard') {
-        hTitle.innerText = "Aujourd'hui";
-        hSub.innerText = "Prends 5 minutes pour ancrer tes lectures";
-        renderDashboard();
-      } else if (tabId === 'review') {
-        hTitle.innerText = "Session 5 min";
-        hSub.innerText = "Mémorisation active";
-        if (reviewQueue.length === 0) startExpressSession();
-      } else {
-        hTitle.innerText = "Bibliothèque";
-        hSub.innerText = "Toutes tes fiches & résumés";
-        renderNotesList();
-      }
-    }
-
-    function updateNavButtonState(btnId, isActive) {
-      const btn = document.getElementById(btnId);
-      if (!btn) return;
-      btn.className = isActive 
-        ? "w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl font-medium text-sm transition text-white bg-zinc-800/80"
-        : "w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl font-medium text-sm transition text-zinc-400 hover:text-white hover:bg-zinc-800/40";
-    }
-
-    // DASHBOARD
-    function renderDashboard() {
-      if (notes.length > 0) {
-        const randomNote = notes[Math.floor(Math.random() * notes.length)];
-        document.getElementById('daily-punchline-text').innerText = `« ${randomNote.punchline} »`;
-        document.getElementById('daily-punchline-source').innerHTML = `${getSourceIcon(randomNote.type)} ${randomNote.reference || randomNote.title}`;
-        document.getElementById('daily-punchline-category').innerText = randomNote.category;
-      }
-
-      document.getElementById('stat-total-notes').innerText = `${notes.length} fiches`;
-
-      // Horizontal pills
-      const pillsContainer = document.getElementById('category-pills-row');
-      pillsContainer.innerHTML = '';
-      
-      const allPill = document.createElement('button');
-      allPill.className = "px-3.5 py-1.5 rounded-full text-xs font-semibold bg-brand-600 text-white shrink-0";
-      allPill.innerText = "Toutes";
-      allPill.onclick = () => { switchTab('notes'); };
-      pillsContainer.appendChild(allPill);
-
-      Object.keys(taxonomy).forEach(cat => {
-        const count = notes.filter(n => n.category === cat).length;
-        const pill = document.createElement('button');
-        pill.className = "px-3 py-1.5 rounded-full text-xs font-medium bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white shrink-0 flex items-center space-x-1.5";
-        pill.innerHTML = `<span>${cat}</span><span class="text-[10px] text-zinc-400 bg-zinc-800 px-1.5 py-0.2 rounded-full">${count}</span>`;
-        pill.onclick = () => {
-          document.getElementById('notes-search-input').value = cat;
-          switchTab('notes');
-        };
-        pillsContainer.appendChild(pill);
-      });
-
-      // Dernières notes compactes
-      const recentList = document.getElementById('dashboard-recent-notes');
-      recentList.innerHTML = '';
-      notes.slice(0, 3).forEach(note => {
-        const item = document.createElement('div');
-        item.className = "bg-[#14151b] border border-zinc-800/60 rounded-xl p-3.5 flex flex-col space-y-2 cursor-pointer hover:border-zinc-700 transition";
-        item.onclick = () => reviewSingleNote(note.id);
-        item.innerHTML = `
-          <div class="flex items-center justify-between text-xs">
-            <span class="font-semibold text-zinc-200 truncate flex items-center space-x-1.5">
-              ${getSourceIcon(note.type)}
-              <span class="truncate max-w-[200px]">${note.title}</span>
-            </span>
-            <span class="text-[11px] text-zinc-400">${note.category}</span>
-          </div>
-          <p class="text-xs text-zinc-400 italic line-clamp-1">« ${note.punchline} »</p>
-        `;
-        recentList.appendChild(item);
-      });
-
-      updateDueBadges();
-    }
-
-    // RÉVISION 5 MIN
-    function startExpressSession(limit = 5) {
-      const shuffled = [...notes].sort(() => 0.5 - Math.random()).slice(0, limit);
-      reviewQueue = shuffled.map(n => {
-        const qList = (n.questions && n.questions.length > 0) ? n.questions : [n.question];
-        return {
-          ...n,
-          activeQuestion: qList[Math.floor(Math.random() * qList.length)]
-        };
-      });
-
-      currentReviewIndex = 0;
-      currentCardFlipped = false;
-      switchTab('review');
-      renderCurrentCard();
-    }
-
-    function setReviewMode(mode) {
-      reviewMode = mode;
-      document.getElementById('btn-mode-flashcard').className = mode === 'flashcard' 
-        ? "px-2.5 py-1 rounded-md text-[11px] font-semibold bg-brand-600 text-white" 
-        : "px-2.5 py-1 rounded-md text-[11px] font-semibold text-zinc-400";
-
-      document.getElementById('btn-mode-quiz').className = mode === 'quiz' 
-        ? "px-2.5 py-1 rounded-md text-[11px] font-semibold bg-brand-600 text-white" 
-        : "px-2.5 py-1 rounded-md text-[11px] font-semibold text-zinc-400";
-
-      document.getElementById('review-flashcard-box').classList.toggle('hidden', mode !== 'flashcard');
-      document.getElementById('flashcard-actions').classList.toggle('hidden', mode !== 'flashcard');
-      document.getElementById('review-quiz-box').classList.toggle('hidden', mode !== 'quiz');
-      document.getElementById('quiz-actions').classList.toggle('hidden', mode !== 'quiz');
-
-      renderCurrentCard();
-    }
-
-    function renderCurrentCard() {
-      if (reviewQueue.length === 0) {
-        showToast("Session terminée ! Bravo 🎉");
-        switchTab('dashboard');
-        return;
-      }
-
-      const note = reviewQueue[currentReviewIndex];
-      const total = reviewQueue.length;
-      
-      document.getElementById('review-progress-text').innerText = `${currentReviewIndex + 1} / ${total}`;
-      const pct = ((currentReviewIndex + 1) / total) * 100;
-      document.getElementById('review-progress-bar').style.width = `${pct}%`;
-
-      currentCardFlipped = false;
-      document.getElementById('flashcard-inner').classList.remove('rotate-y-180');
-
-      const displayedQuestion = note.activeQuestion || note.question || `Idée clé de : ${note.title}`;
-      document.getElementById('card-hierarchy').innerText = `${note.category} > ${note.subcategory}`;
-      document.getElementById('card-source-tag').innerHTML = `${getSourceIcon(note.type)} ${note.reference || note.title}`;
-      document.getElementById('card-question-text').innerText = displayedQuestion;
-      document.getElementById('card-answer-punchline').innerText = `« ${note.punchline} »`;
-      document.getElementById('card-fullnote-preview').innerHTML = note.fullNotes ? note.fullNotes.replace(/\n/g, '<br>') : "Aucune note additionnelle.";
-
-      // Quizz
-      document.getElementById('quiz-source-tag').innerHTML = `${getSourceIcon(note.type)} ${note.title}`;
-      document.getElementById('quiz-question-text').innerText = displayedQuestion;
-      const optContainer = document.getElementById('quiz-options-container');
-      optContainer.innerHTML = '';
-      document.getElementById('quiz-explanation-box').classList.add('hidden');
-      document.getElementById('quiz-next-btn').disabled = true;
-
-      const options = note.quizOptions || [
-        note.punchline,
-        "Ce concept est purement théorique et inopérant",
-        "L'exact inverse de ce principe"
-      ];
-      const correctIdx = note.quizCorrectIndex !== undefined ? note.quizCorrectIndex : 0;
-
-      options.forEach((optText, idx) => {
-        const btn = document.createElement('button');
-        btn.className = "tap-target w-full text-left p-3 rounded-xl bg-[#0d0e12] border border-zinc-800 text-xs text-zinc-200 transition font-medium flex items-center justify-between";
-        btn.innerHTML = `<span>${optText}</span><i class="fa-regular fa-circle text-zinc-500"></i>`;
-        btn.onclick = () => handleQuizSelect(idx, correctIdx, btn, note.punchline);
-        optContainer.appendChild(btn);
-      });
-    }
-
-    function flipFlashcard() {
-      currentCardFlipped = !currentCardFlipped;
-      document.getElementById('flashcard-inner').classList.toggle('rotate-y-180', currentCardFlipped);
-    }
-
-    function handleCardAnswer(quality) {
-      nextCard();
-    }
-
-    function handleQuizSelect(selectedIndex, correctIndex, buttonEl, punchline) {
-      const optContainer = document.getElementById('quiz-options-container');
-      const buttons = optContainer.querySelectorAll('button');
-      buttons.forEach(b => b.onclick = null);
-
-      if (selectedIndex === correctIndex) {
-        buttonEl.className = "tap-target w-full text-left p-3 rounded-xl bg-emerald-950/40 border border-emerald-500 text-xs text-white font-medium flex items-center justify-between";
-        buttonEl.innerHTML = `<span>${buttonEl.innerText}</span><i class="fa-solid fa-check text-emerald-400"></i>`;
-        showToast("Exact !", "success");
-      } else {
-        buttonEl.className = "tap-target w-full text-left p-3 rounded-xl bg-rose-950/40 border border-rose-500 text-xs text-white font-medium flex items-center justify-between";
-        buttonEl.innerHTML = `<span>${buttonEl.innerText}</span><i class="fa-solid fa-xmark text-rose-400"></i>`;
-        const correctBtn = buttons[correctIndex];
-        if (correctBtn) correctBtn.classList.add('border-emerald-500', 'text-emerald-300');
-      }
-
-      const expBox = document.getElementById('quiz-explanation-box');
-      document.getElementById('quiz-explanation-text').innerText = `« ${punchline} »`;
-      expBox.classList.remove('hidden');
-      document.getElementById('quiz-next-btn').disabled = false;
-    }
-
-    function nextCard() {
-      if (currentReviewIndex < reviewQueue.length - 1) {
-        currentReviewIndex++;
-        renderCurrentCard();
-      } else {
-        showToast("Session 5 min terminée avec succès ! 🎉");
-        setTimeout(() => switchTab('dashboard'), 800);
-      }
-    }
-
-    // BIBLIOTHÈQUE & RECHERCHE
-    function filterByType(type) {
-      activeFilterType = type;
-      ['all', 'book', 'youtube', 'ai', 'other'].forEach(t => {
-        const btn = document.getElementById(`filter-type-${t}`);
-        if (!btn) return;
-        if (t === type) {
-          btn.className = "filter-chip px-3 py-1.5 rounded-lg text-xs font-medium bg-brand-600 text-white whitespace-nowrap";
-        } else {
-          btn.className = "filter-chip px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-white whitespace-nowrap";
-        }
-      });
-      renderNotesList();
-    }
-
-    function filterByTaxonomy(val) {
-      activeFilterTaxonomy = val;
-      renderTaxonomyFilters();
-      renderNotesList();
-    }
-
-    function renderTaxonomyFilters() {
-      const container = document.getElementById('taxonomy-filter-pills');
-      if (!container) return;
-      container.innerHTML = '';
-
-      // Calcul dynamique des catégories et sous-catégories réellement utilisées dans les fiches
-      const usedCategories = {};
-      const usedSubcategories = {};
-
-      notes.forEach(n => {
-        if (n.category) {
-          usedCategories[n.category] = (usedCategories[n.category] || 0) + 1;
-        }
-        if (n.subcategory) {
-          usedSubcategories[n.subcategory] = {
-            count: (usedSubcategories[n.subcategory]?.count || 0) + 1,
-            parentCat: n.category
-          };
-        }
-      });
-
-      // Bouton "Toutes"
-      const allBtn = document.createElement('button');
-      allBtn.className = activeFilterTaxonomy === 'all'
-        ? "px-2.5 py-1 rounded-md text-[11px] font-semibold bg-zinc-700 text-white whitespace-nowrap"
-        : "px-2.5 py-1 rounded-md text-[11px] font-medium bg-zinc-900 text-zinc-400 hover:text-white whitespace-nowrap border border-zinc-800";
-      allBtn.innerHTML = `Toutes <span class="text-[10px] opacity-70">(${notes.length})</span>`;
-      allBtn.onclick = () => filterByTaxonomy('all');
-      container.appendChild(allBtn);
-
-      // 1. Afficher les Catégories qui possèdent réellement des fiches
-      Object.keys(usedCategories).forEach(cat => {
-        const catBtn = document.createElement('button');
-        const isCatActive = activeFilterTaxonomy === cat;
-        catBtn.className = isCatActive
-          ? "px-2.5 py-1 rounded-md text-[11px] font-semibold bg-brand-600 text-white whitespace-nowrap shadow-sm"
-          : "px-2.5 py-1 rounded-md text-[11px] font-medium bg-zinc-900 text-zinc-300 hover:text-white whitespace-nowrap border border-zinc-800";
-        catBtn.innerHTML = `<span class="text-brand-400">#</span> ${cat} <span class="text-[10px] opacity-70">(${usedCategories[cat]})</span>`;
-        catBtn.onclick = () => filterByTaxonomy(cat);
-        container.appendChild(catBtn);
-      });
-
-      // 2. Afficher les Sous-Catégories existantes (si une catégorie parent est active, afficher uniquement les siennes)
-      Object.keys(usedSubcategories).forEach(sub => {
-        const subData = usedSubcategories[sub];
-        
-        // Si l'utilisateur a filtré sur une catégorie, on n'affiche que ses sous-catégories
-        if (activeFilterTaxonomy !== 'all' && usedCategories[activeFilterTaxonomy] && subData.parentCat !== activeFilterTaxonomy) {
-          return;
-        }
-
-        const subBtn = document.createElement('button');
-        const isSubActive = activeFilterTaxonomy === sub;
-        subBtn.className = isSubActive
-          ? "px-2 py-1 rounded-md text-[10px] font-semibold bg-indigo-600 text-white whitespace-nowrap"
-          : "px-2 py-1 rounded-md text-[10px] font-medium bg-zinc-900/60 text-zinc-400 hover:text-zinc-200 whitespace-nowrap border border-zinc-800/80";
-        subBtn.innerHTML = `${sub} <span class="text-[9px] opacity-70">(${subData.count})</span>`;
-        subBtn.onclick = () => filterByTaxonomy(sub);
-        container.appendChild(subBtn);
-      });
-    }
-
-    function renderNotesList() {
-      const container = document.getElementById('notes-cards-container');
-      container.innerHTML = '';
-
-      const query = (document.getElementById('notes-search-input')?.value || '').toLowerCase();
-
-      const filtered = notes.filter(n => {
-        const matchesQuery = n.title.toLowerCase().includes(query) ||
-                             n.punchline.toLowerCase().includes(query) ||
-                             n.category.toLowerCase().includes(query) ||
-                             (n.subcategory && n.subcategory.toLowerCase().includes(query));
-        const matchesType = activeFilterType === 'all' || n.type === activeFilterType;
-        const matchesTaxonomy = activeFilterTaxonomy === 'all' ||
-                                n.category === activeFilterTaxonomy ||
-                                n.subcategory === activeFilterTaxonomy;
-        return matchesQuery && matchesType && matchesTaxonomy;
-      });
-
-      if (filtered.length === 0) {
-        container.innerHTML = `
-          <div class="py-12 text-center text-zinc-400 space-y-2">
-            <p class="text-xs">Aucune note trouvée avec ces filtres.</p>
-          </div>
-        `;
-        return;
-      }
-
-      filtered.forEach(note => {
-        const card = document.createElement('div');
-        card.className = "bg-[#14151b] border border-zinc-800/80 rounded-xl p-4 space-y-2.5 transition";
-        card.innerHTML = `
-          <div class="flex items-center justify-between text-xs">
-            <span class="font-semibold text-white flex items-center space-x-1.5">
-              ${getSourceIcon(note.type)}
-              <span>${note.title}</span>
-            </span>
-            <span class="text-[11px] text-zinc-400">${note.category}</span>
-          </div>
-
-          <p class="text-xs text-amber-200/90 italic font-medium leading-relaxed">« ${note.punchline} »</p>
-
-          <div class="pt-2 border-t border-zinc-800/60 flex items-center justify-between text-xs text-zinc-400">
-            <span class="text-[11px] text-zinc-400 truncate max-w-[150px]">${note.reference || note.subcategory}</span>
-            <div class="flex items-center space-x-3">
-              <button onclick="reviewSingleNote('${note.id}')" class="text-amber-400 font-semibold hover:underline">Réviser</button>
-              <button onclick="editNote('${note.id}')" class="hover:text-white" title="Modifier"><i class="fa-solid fa-pen text-[10px]"></i></button>
-              <button onclick="requestDeleteNote('${note.id}')" class="hover:text-rose-400" title="Supprimer la fiche"><i class="fa-solid fa-trash-can text-[10px]"></i></button>
-            </div>
-          </div>
-        `;
-        container.appendChild(card);
-      });
-    }
-
-    function reviewSingleNote(id) {
-      const found = notes.find(n => n.id === id);
-      if (found) {
-        reviewQueue = [{
-          ...found,
-          activeQuestion: found.question || (found.questions ? found.questions[0] : null)
-        }];
-        currentReviewIndex = 0;
-        currentCardFlipped = false;
-        switchTab('review');
-        renderCurrentCard();
-      }
-    }
-
-    // Modal de confirmation personnalisé
-    let pendingDeleteAction = null;
-
-    function openDeleteConfirmModal(title, text, onConfirm) {
-      document.getElementById('delete-confirm-title').innerText = title;
-      document.getElementById('delete-confirm-text').innerText = text;
-      pendingDeleteAction = onConfirm;
-
-      const confirmBtn = document.getElementById('delete-confirm-btn');
-      confirmBtn.onclick = () => {
-        if (pendingDeleteAction) pendingDeleteAction();
-        closeDeleteConfirmModal();
-      };
-
-      document.getElementById('delete-confirm-modal').classList.remove('hidden');
-    }
-
-    function closeDeleteConfirmModal() {
-      document.getElementById('delete-confirm-modal').classList.add('hidden');
-      pendingDeleteAction = null;
-    }
-
-    function requestDeleteNote(id) {
-      const target = notes.find(n => n.id === id);
-      const title = target ? `« ${target.title} »` : "cette fiche";
-      openDeleteConfirmModal(
-        "Supprimer la fiche",
-        `Voulez-vous vraiment supprimer définitivement la fiche ${title} ?`,
-        () => performDeleteNote(id)
-      );
-    }
-
-    function triggerDeleteFromModal() {
-      if (!editingNoteId) return;
-      const targetId = editingNoteId;
-      requestDeleteNote(targetId);
-    }
-
-    function performDeleteNote(id) {
-      notes = notes.filter(n => n.id !== id);
-      saveStateToStorage();
-      closeNoteModal();
-      showToast("Fiche supprimée avec succès !");
-      renderNotesList();
-      renderTaxonomyFilters();
-      renderDashboard();
-    }
-
-    // MODAL & ASSISTANT IA
-    function openNoteModal(editId = null) {
-      editingNoteId = editId;
-      initCategoriesUI();
-
-      const deleteBtn = document.getElementById('btn-delete-current-note');
-
-      if (editId) {
-        const note = notes.find(n => n.id === editId);
-        if (note) {
-          document.getElementById('modal-title').innerText = "Modifier la Fiche";
-          if (deleteBtn) deleteBtn.classList.remove('hidden');
-          selectSourceType(note.type);
-          document.getElementById('input-title').value = note.title;
-          document.getElementById('input-reference').value = note.reference || "";
-          document.getElementById('select-category').value = note.category;
-          updateSubcategoriesSelect();
-          document.getElementById('select-subcategory').value = note.subcategory;
-          document.getElementById('input-fullnotes').value = note.fullNotes || "";
-          document.getElementById('input-punchline').value = note.punchline || "";
-          renderQuestionFields(note.questions || [note.question || ""]);
-        }
-      } else {
-        document.getElementById('modal-title').innerText = "Nouvelle Fiche";
-        if (deleteBtn) deleteBtn.classList.add('hidden');
-        selectSourceType('book');
-        document.getElementById('input-title').value = "";
-        document.getElementById('input-reference').value = "";
-        document.getElementById('input-fullnotes').value = "";
-        document.getElementById('input-punchline').value = "";
-        renderQuestionFields([""]);
-      }
-
-      document.getElementById('note-modal').classList.remove('hidden');
-    }
-
-    function closeNoteModal() {
-      document.getElementById('note-modal').classList.add('hidden');
-      editingNoteId = null;
-    }
-
-    function renderQuestionFields(questionsArray) {
-      const container = document.getElementById('questions-inputs-container');
-      container.innerHTML = '';
-      questionsArray.forEach((q, idx) => {
-        const wrap = document.createElement('div');
-        wrap.className = "flex items-center space-x-2";
-        wrap.innerHTML = `
-          <input type="text" value="${q.replace(/"/g, '&quot;')}" class="question-input-item tap-target w-full bg-[#0d0e12] border border-zinc-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-brand-500" placeholder="Question ${idx + 1}...">
-          ${questionsArray.length > 1 ? `<button type="button" onclick="this.parentElement.remove()" class="text-zinc-500 hover:text-rose-400 p-2"><i class="fa-solid fa-trash-can text-xs"></i></button>` : ''}
-        `;
-        container.appendChild(wrap);
-      });
-    }
-
-    function addQuestionField() {
-      const container = document.getElementById('questions-inputs-container');
-      const idx = container.querySelectorAll('.question-input-item').length + 1;
-      const wrap = document.createElement('div');
-      wrap.className = "flex items-center space-x-2";
-      wrap.innerHTML = `
-        <input type="text" class="question-input-item tap-target w-full bg-[#0d0e12] border border-zinc-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-brand-500" placeholder="Question ${idx}...">
-        <button type="button" onclick="this.parentElement.remove()" class="text-zinc-500 hover:text-rose-400 p-2"><i class="fa-solid fa-trash-can text-xs"></i></button>
-      `;
-      container.appendChild(wrap);
-    }
-
-    function getQuestionsFromForm() {
-      const inputs = document.querySelectorAll('.question-input-item');
-      const arr = [];
-      inputs.forEach(inp => {
-        const v = inp.value.trim();
-        if (v) arr.push(v);
-      });
-      return arr;
-    }
-
-    function initCategoriesUI() {
-      const catSelect = document.getElementById('select-category');
-      const desktopList = document.getElementById('desktop-category-list');
-      if (!catSelect) return;
-
-      catSelect.innerHTML = '';
-      Object.keys(taxonomy).forEach(cat => {
-        const opt = document.createElement('option');
-        opt.value = cat;
-        opt.innerText = cat;
-        catSelect.appendChild(opt);
-      });
-
-      if (desktopList) {
-        desktopList.innerHTML = '';
-        Object.keys(taxonomy).forEach(cat => {
-          const btn = document.createElement('button');
-          btn.className = "w-full text-left px-2 py-1.5 rounded-lg hover:bg-zinc-800 hover:text-white flex items-center justify-between text-xs";
-          const count = notes.filter(n => n.category === cat).length;
-          btn.innerHTML = `<span>${cat}</span><span class="text-[10px] text-zinc-400">${count}</span>`;
-          btn.onclick = () => {
-            document.getElementById('notes-search-input').value = cat;
-            switchTab('notes');
-          };
-          desktopList.appendChild(btn);
-        });
-      }
-
-      updateSubcategoriesSelect();
-    }
-
-    function updateSubcategoriesSelect() {
-      const catSelect = document.getElementById('select-category');
-      const subSelect = document.getElementById('select-subcategory');
-      if (!catSelect || !subSelect) return;
-
-      const selectedCat = catSelect.value;
-      const subcategories = taxonomy[selectedCat] || [];
-      subSelect.innerHTML = '';
-      subcategories.forEach(sub => {
-        const opt = document.createElement('option');
-        opt.value = sub;
-        opt.innerText = sub;
-        subSelect.appendChild(opt);
-      });
-    }
-
-    function addNewCategoryPrompt() {
-      const name = window.prompt("Nom de la catégorie (ex: Économie) :");
-      if (name && name.trim()) {
-        const clean = name.trim();
-        if (!taxonomy[clean]) {
-          taxonomy[clean] = ["Général"];
-          saveStateToStorage();
-          initCategoriesUI();
-          renderTaxonomyFilters();
-          document.getElementById('select-category').value = clean;
-          updateSubcategoriesSelect();
-          showToast(`Catégorie « ${clean} » créée`);
-        }
-      }
-    }
-
-    function addNewSubcategoryPrompt() {
-      const currentCat = document.getElementById('select-category').value;
-      const name = window.prompt(`Sous-catégorie pour "${currentCat}" :`);
-      if (name && name.trim()) {
-        const clean = name.trim();
-        if (!taxonomy[currentCat]) taxonomy[currentCat] = [];
-        if (!taxonomy[currentCat].includes(clean)) {
-          taxonomy[currentCat].push(clean);
-          saveStateToStorage();
-          updateSubcategoriesSelect();
-          renderTaxonomyFilters();
-          document.getElementById('select-subcategory').value = clean;
-          showToast(`Sous-catégorie « ${clean} » ajoutée`);
-        }
-      }
-    }
-
-    // Gestion via la modale dédiée
-    function openManageTaxonomyModal() {
-      const modal = document.getElementById('taxonomy-modal');
-      const select = document.getElementById('modal-parent-cat-select');
-      const tree = document.getElementById('modal-taxonomy-tree');
-      if (!modal || !select || !tree) return;
-
-      select.innerHTML = '';
-      tree.innerHTML = '';
-
-      Object.keys(taxonomy).forEach(cat => {
-        const opt = document.createElement('option');
-        opt.value = cat;
-        opt.innerText = cat;
-        select.appendChild(opt);
-
-        const group = document.createElement('div');
-        group.className = "p-3 bg-zinc-900/70 rounded-xl border border-zinc-800 space-y-2";
-        const subs = taxonomy[cat] || [];
-        const countInCat = notes.filter(n => n.category === cat).length;
-
-        group.innerHTML = `
-          <div class="font-bold text-zinc-200 text-xs flex items-center justify-between">
-            <span class="flex items-center gap-1.5 text-brand-300">
-              <i class="fa-solid fa-folder text-[11px]"></i>
-              <span># ${cat}</span>
-              <span class="text-[10px] text-zinc-500 font-normal">(${countInCat} fiches)</span>
-            </span>
-            <button onclick="requestDeleteCategory('${cat.replace(/'/g, "\\'")}')" class="text-zinc-500 hover:text-rose-400 p-1 transition" title="Supprimer la catégorie ${cat}">
-              <i class="fa-solid fa-trash-can text-[11px]"></i>
-            </button>
-          </div>
-          <div class="flex flex-wrap gap-1.5 pt-1">
-            ${subs.map(s => `
-              <span class="inline-flex items-center gap-1 px-2.5 py-1 bg-zinc-800 text-zinc-300 rounded-lg text-[10px] border border-zinc-700/60">
-                <span>${s}</span>
-                <button onclick="requestDeleteSubcategory('${cat.replace(/'/g, "\\'")}', '${s.replace(/'/g, "\\'")}')" class="text-zinc-500 hover:text-rose-400 ml-0.5" title="Supprimer le sous-thème ${s}">
-                  <i class="fa-solid fa-xmark text-[9px]"></i>
-                </button>
-              </span>
-            `).join('')}
-          </div>
-        `;
-        tree.appendChild(group);
-      });
-
-      modal.classList.remove('hidden');
-    }
-
-    function requestDeleteCategory(cat) {
-      const associatedNotes = notes.filter(n => n.category === cat);
-      let warningText = `Voulez-vous supprimer la catégorie « ${cat} » ?`;
-      if (associatedNotes.length > 0) {
-        warningText += `\nAttention : ${associatedNotes.length} fiche(s) associée(s) seront reclassées dans "Général".`;
-      }
-
-      openDeleteConfirmModal(
-        `Supprimer "${cat}"`,
-        warningText,
-        () => performDeleteCategory(cat)
-      );
-    }
-
-    function performDeleteCategory(cat) {
-      delete taxonomy[cat];
-      // Réassigner les notes orphelines
-      notes.forEach(n => {
-        if (n.category === cat) {
-          n.category = "Culture Générale";
-          n.subcategory = "Général";
-        }
-      });
-      // S'assurer qu'au moins une catégorie de secours existe
-      if (Object.keys(taxonomy).length === 0) {
-        taxonomy["Culture Générale"] = ["Général"];
-      }
-
-      saveStateToStorage();
-      initCategoriesUI();
-      renderTaxonomyFilters();
-      renderDashboard();
-      renderNotesList();
-      openManageTaxonomyModal();
-      showToast(`Catégorie « ${cat} » supprimée.`);
-    }
-
-    function requestDeleteSubcategory(parentCat, sub) {
-      openDeleteConfirmModal(
-        `Supprimer "${sub}"`,
-        `Voulez-vous retirer le sous-thème « ${sub} » de la catégorie « ${parentCat} » ?`,
-        () => performDeleteSubcategory(parentCat, sub)
-      );
-    }
-
-    function performDeleteSubcategory(parentCat, sub) {
-      if (taxonomy[parentCat]) {
-        taxonomy[parentCat] = taxonomy[parentCat].filter(s => s !== sub);
-        if (taxonomy[parentCat].length === 0) {
-          taxonomy[parentCat] = ["Général"];
-        }
-      }
-      notes.forEach(n => {
-        if (n.category === parentCat && n.subcategory === sub) {
-          n.subcategory = "Général";
-        }
-      });
-
-      saveStateToStorage();
-      updateSubcategoriesSelect();
-      renderTaxonomyFilters();
-      renderDashboard();
-      renderNotesList();
-      openManageTaxonomyModal();
-      showToast(`Sous-thème « ${sub} » supprimé.`);
-    }
-
-    function closeManageTaxonomyModal() {
-      const modal = document.getElementById('taxonomy-modal');
-      if (modal) modal.classList.add('hidden');
-    }
-
-    function handleAddCategoryFromModal() {
-      const input = document.getElementById('new-cat-input');
-      const val = input ? input.value.trim() : '';
-      if (!val) {
-        showToast("Veuillez saisir un nom de catégorie.");
-        return;
-      }
-      if (!taxonomy[val]) {
-        taxonomy[val] = ["Général"];
-        saveStateToStorage();
-        initCategoriesUI();
-        renderTaxonomyFilters();
-        renderDashboard();
-        
-        // Sélectionner automatiquement dans le formulaire de note s'il est ouvert
-        const catSelect = document.getElementById('select-category');
-        if (catSelect) {
-          catSelect.value = val;
-          updateSubcategoriesSelect();
-        }
-
-        input.value = '';
-        openManageTaxonomyModal();
-        showToast(`Catégorie « ${val} » ajoutée avec succès ! ✨`);
-      } else {
-        showToast("Cette catégorie existe déjà.");
-      }
-    }
-
-    function handleAddSubcategoryFromModal() {
-      const select = document.getElementById('modal-parent-cat-select');
-      const input = document.getElementById('new-sub-input');
-      const parent = select ? select.value : null;
-      const val = input ? input.value.trim() : '';
-      if (!parent || !val) {
-        showToast("Veuillez indiquer un sous-thème.");
-        return;
-      }
-
-      if (!taxonomy[parent]) taxonomy[parent] = [];
-      if (!taxonomy[parent].includes(val)) {
-        taxonomy[parent].push(val);
-        saveStateToStorage();
-        updateSubcategoriesSelect();
-        renderTaxonomyFilters();
-        renderDashboard();
-
-        // Sélectionner automatiquement dans le formulaire de note
-        const catSelect = document.getElementById('select-category');
-        const subSelect = document.getElementById('select-subcategory');
-        if (catSelect && subSelect) {
-          catSelect.value = parent;
-          updateSubcategoriesSelect();
-          subSelect.value = val;
-        }
-
-        input.value = '';
-        openManageTaxonomyModal();
-        showToast(`Sous-thématique « ${val} » ajoutée à ${parent} ! ✨`);
-      } else {
-        showToast("Cette sous-thématique existe déjà.");
-      }
-    }
-
-    function selectSourceType(type) {
-      currentSourceType = type;
-      const activeClass = "tap-target flex items-center justify-center space-x-1.5 py-2 rounded-xl border border-brand-500 bg-brand-500/10 text-white font-medium transition text-[11px] sm:text-xs";
-      const inactiveClass = "tap-target flex items-center justify-center space-x-1.5 py-2 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-400 font-medium transition text-[11px] sm:text-xs";
-
-      document.getElementById('src-btn-book').className = type === 'book' ? activeClass : inactiveClass;
-      document.getElementById('src-btn-youtube').className = type === 'youtube' ? activeClass : inactiveClass;
-      const btnAi = document.getElementById('src-btn-ai');
-      if (btnAi) btnAi.className = type === 'ai' ? activeClass : inactiveClass;
-      document.getElementById('src-btn-other').className = type === 'other' ? activeClass : inactiveClass;
-
-      const ytBox = document.getElementById('youtube-url-box');
-      if (ytBox) {
-        ytBox.classList.toggle('hidden', type !== 'youtube');
-      }
-
-      const aiBox = document.getElementById('ai-concept-box');
-      if (aiBox) {
-        aiBox.classList.toggle('hidden', type !== 'ai');
-      }
-
-      const labelTitle = document.getElementById('label-source-title');
-      const labelRef = document.getElementById('label-source-author');
-      if (type === 'book') {
-        labelTitle.innerText = "Titre du livre *";
-        labelRef.innerText = "Auteur";
-      } else if (type === 'youtube') {
-        labelTitle.innerText = "Titre de la vidéo *";
-        labelRef.innerText = "Chaîne ou Lien";
-      } else if (type === 'ai') {
-        labelTitle.innerText = "Sujet / Concept *";
-        labelRef.innerText = "Origine / Courant / Auteur clé";
-        // Pré-sélectionner la catégorie IA si elle existe
-        const catSelect = document.getElementById('select-category');
-        if (catSelect && taxonomy["IA & Concepts"]) {
-          catSelect.value = "IA & Concepts";
-          updateSubcategoriesSelect();
-        }
-      } else {
-        labelTitle.innerText = "Titre de la note *";
-        labelRef.innerText = "Source";
-      }
-    }
-
+      ? (JSON.parse(localStorage.getItem('synapse_taxonomy')) || {})
+      : DEFAULT_TAXONOMY;
+    let notes = localStorage.getItem('synapse_initialized')
+      ? (JSON.parse(localStorage.getItem('synapse_notes')) || [])
+      : DEFAULT_NOTES;
+
+    if (!localStorage.getItem('synapse_initialized')) {
     // GÉNÉRATION COMPLÈTE DE FICHE VIA UN MOT-CLÉ / CONCEPT
     async function generateConceptWithAI() {
       const topicInput = document.getElementById('input-ai-topic');
@@ -1972,45 +966,27 @@ Extrais ou génère en JSON :
 6. "questions": 3 questions de révision variées (sur le principe de base, l'exemple et la nuance).`;
 
       try {
-        const apiKey = getGeminiApiKey();
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-
-        const payload = {
-          contents: [{ parts: [{ text: promptMsg }] }],
-          generationConfig: {
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: "OBJECT",
-              properties: {
-                title: { type: "STRING" },
-                authorOrOrigin: { type: "STRING" },
-                cleanNotes: { type: "STRING" },
-                punchline: { type: "STRING" },
-                suggestedSubcategory: { type: "STRING" },
-                questions: { type: "ARRAY", items: { type: "STRING" } }
-              },
-              required: ["title", "authorOrOrigin", "cleanNotes", "punchline", "questions"]
-            }
-          }
+        const schema = {
+          type: "OBJECT",
+          properties: {
+            title: { type: "STRING" },
+            authorOrOrigin: { type: "STRING" },
+            cleanNotes: { type: "STRING" },
+            punchline: { type: "STRING" },
+            suggestedSubcategory: { type: "STRING" },
+            questions: { type: "ARRAY", items: { type: "STRING" } }
+          },
+          required: ["title", "authorOrOrigin", "cleanNotes", "punchline", "questions"]
         };
 
-        const res = await fetch(apiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        const data = await res.json();
-        const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (jsonText) {
-          const parsed = JSON.parse(jsonText);
+        const parsed = await callGeminiJSON(promptMsg, schema);
+        if (parsed) {
           if (parsed.title) document.getElementById('input-title').value = parsed.title;
           if (parsed.authorOrOrigin) document.getElementById('input-reference').value = parsed.authorOrOrigin;
           if (parsed.cleanNotes) document.getElementById('input-fullnotes').value = parsed.cleanNotes;
           if (parsed.punchline) document.getElementById('input-punchline').value = parsed.punchline;
           if (parsed.questions) renderQuestionFields(parsed.questions);
 
-          // Ajuster la catégorie et sous-catégorie si possible
           if (taxonomy["IA & Concepts"]) {
             document.getElementById('select-category').value = "IA & Concepts";
             updateSubcategoriesSelect();
@@ -2025,11 +1001,12 @@ Extrais ou génère en JSON :
           }
 
           showToast(`Fiche générée sur « ${parsed.title || topic} » ✨`);
-        } else {
-          throw new Error("No data");
         }
       } catch (e) {
-        // Fallback intelligent structuré et concret avec exemple
+        if (e.message !== "NO_API_KEY") {
+          console.warn("Détail erreur API Gemini:", e.message);
+          showToast(`Erreur API : ${e.message.slice(0, 60)}`);
+        }
         const formattedFallback = `🎯 EN BREF :
 Le ${topic} propose une grille de lecture simple pour comprendre un phénomène précis.
 
@@ -2052,7 +1029,9 @@ Ne pas réduire cette approche à un cas isolé, mais l'envisager comme un syst�
           `Quel exemple du quotidien illustre bien ${topic} ?`,
           `Quel piège ou erreur classique faut-il éviter concernant ${topic} ?`
         ]);
-        showToast("Fiche créée en mode local.");
+        if (e.message === "NO_API_KEY") {
+          showToast("Fiche créée en mode local (ajoute ta clé API dans Synchro Cloud).");
+        }
       } finally {
         btn.disabled = false;
         btn.innerHTML = origText;
@@ -2076,7 +1055,6 @@ Ne pas réduire cette approche à un cas isolé, mais l'envisager comme un syst�
       btn.disabled = true;
       btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-xs"></i><span>Extraction...</span>`;
 
-      // Détecter l'ID de la vidéo
       let videoId = null;
       try {
         if (url.includes('youtu.be/')) {
@@ -2090,7 +1068,6 @@ Ne pas réduire cette approche à un cas isolé, mais l'envisager comme un syst�
         videoId = null;
       }
 
-      // 1. Récupération préalable des vraies métadonnées YouTube (Titre exact & Nom de chaîne) via oEmbed officiel
       let realTitle = "";
       let realAuthor = "";
       if (url) {
@@ -2152,110 +1129,6 @@ Génère en JSON :
           type: "OBJECT",
           properties: {
             title: { type: "STRING" },
-            authorOrOrigin: { type: "STRING" },
-            cleanNotes: { type: "STRING" },
-            punchline: { type: "STRING" },
-            suggestedSubcategory: { type: "STRING" },
-            questions: { type: "ARRAY", items: { type: "STRING" } }
-          },
-          required: ["title", "authorOrOrigin", "cleanNotes", "punchline", "questions"]
-        };
-
-        const parsed = await callGeminiJSON(promptMsg, schema);
-        if (parsed) {
-          if (parsed.title) document.getElementById('input-title').value = parsed.title;
-          if (parsed.authorOrOrigin) document.getElementById('input-reference').value = parsed.authorOrOrigin;
-          if (parsed.cleanNotes) document.getElementById('input-fullnotes').value = parsed.cleanNotes;
-          if (parsed.punchline) document.getElementById('input-punchline').value = parsed.punchline;
-          if (parsed.questions) renderQuestionFields(parsed.questions);
-
-          // Ajuster la catégorie et sous-catégorie si possible
-          if (taxonomy["IA & Concepts"]) {
-            document.getElementById('select-category').value = "IA & Concepts";
-            updateSubcategoriesSelect();
-            if (parsed.suggestedSubcategory && !taxonomy["IA & Concepts"].includes(parsed.suggestedSubcategory)) {
-              taxonomy["IA & Concepts"].push(parsed.suggestedSubcategory);
-              saveStateToStorage();
-              updateSubcategoriesSelect();
-            }
-            if (parsed.suggestedSubcategory) {
-              document.getElementById('select-subcategory').value = parsed.suggestedSubcategory;
-            }
-          }
-
-          showToast(`Fiche générée sur « ${parsed.title || topic} » ✨`);
-        }
-      } catch (e) {
-        if (e.message !== "NO_API_KEY") {
-          console.warn("Détail erreur API Gemini:", e.message);
-          showToast(`Erreur API : ${e.message.slice(0, 60)}...`);
-        }
-        // Fallback intelligent structuré et concret avec exemple
-        const formattedFallback = `🎯 EN BREF :
-Le ${topic} propose une grille de lecture simple pour comprendre un phénomène précis.
-
-⚙️ COMMENT ÇA FONCTIONNE :
-• Déclencheur : une situation de départ qui nécessite une réaction.
-• Mécanisme : les choix des acteurs influencent l'issue finale.
-
-💡 EXEMPLE CONCRET DU QUOTIDIEN :
-Imagine une situation courante où chacun attend que l'autre agisse : le ${topic} montre comment coordonner les actions pour débloquer l'ensemble.
-
-⚠️ LA NUANCE / LE PIÈGE :
-Ne pas réduire cette approche à un cas isolé, mais l'envisager comme un système global.`;
-
-        document.getElementById('input-title').value = topic.charAt(0).toUpperCase() + topic.slice(1);
-        document.getElementById('input-reference').value = "Concept théorique";
-        document.getElementById('input-fullnotes').value = formattedFallback;
-        document.getElementById('input-punchline').value = `${topic} : comprendre les rouages fondamentaux pour agir efficacement dans le monde réel.`;
-        renderQuestionFields([
-          `Quel est le principe de base de : ${topic} ?`,
-          `Quel exemple du quotidien illustre bien ${topic} ?`,
-          `Quel piège ou erreur classique faut-il éviter concernant ${topic} ?`
-        ]);
-        if (e.message === "NO_API_KEY") {
-          showToast("Fiche créée en mode local (ajoute ta clé API dans Synchro Cloud).");
-        }
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = origText;
-      }
-    }
-
-    async function distillNotesWithAI() {
-      const fullText = document.getElementById('input-fullnotes').value.trim();
-      const title = document.getElementById('input-title').value.trim();
-      if (!fullText && !title) {
-        showToast("Renseigne au moins un titre ou des notes.");
-        return;
-      }
-
-      const btn = document.getElementById('btn-distill-ai');
-      const origText = btn.innerHTML;
-      btn.disabled = true;
-      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-amber-300"></i><span>Nettoyage & Structuration...</span>`;
-
-      const systemPrompt = `Tu es un expert pédagogique. Réorganise, corrige l'orthographe et aère la note ("cleanNotes") selon cette structure claire avec des sauts de ligne systématiques :
-
-🎯 EN BREF :
-[Principe central expliqué simplement]
-
-⚙️ POINTS CLÉS :
-• [Point 1]
-• [Point 2]
-
-💡 EXEMPLE CONCRET :
-[Un exemple parlant du quotidien ou cas réel pour ancrer l'idée et ne pas rester dans l'abstrait]
-
-Crée également 1 punchline percutante ("punchline") et 2-3 questions variées pour la révision ("questions").`;
-
-      const userQuery = `Titre : ${title}\nNotes brutes : """${fullText || title}"""`;
-
-      try {
-        const schema = {
-          type: "OBJECT",
-          properties: {
-            title: { type: "STRING" },
             channel: { type: "STRING" },
             cleanNotes: { type: "STRING" },
             punchline: { type: "STRING" },
@@ -2284,10 +1157,9 @@ Crée également 1 punchline percutante ("punchline") et 2-3 questions variées 
         document.getElementById('input-title').value = finalTitle;
         document.getElementById('input-reference').value = finalAuthor;
 
-        // Extraction locale intelligente si l'utilisateur a collé la transcription sans clé API
         if (rawTranscript.length > 40) {
           const sentences = rawTranscript
-            .replace(/\d{1,2}:\d{2}/g, '') // Nettoyer les timecodes (ex: 02:15)
+            .replace(/\d{1,2}:\d{2}/g, '')
             .split(/[.!?]+/)
             .map(s => s.trim())
             .filter(s => s.length > 35 && s.length < 220);
@@ -2371,7 +1243,6 @@ Notes brutes : """${fullText || title}"""`;
         if (e.message !== "NO_API_KEY") {
           showToast(`Erreur API : ${e.message.slice(0, 60)}`);
         }
-        // Fallback local structuré
         const cleanFallback = `🎯 EN BREF :\n${title || 'Concept'}\n\n⚙️ POINTS CLÉS :\n• ${fullText.split('.')[0] || 'Idée principale'}.\n\n💡 EXEMPLE CONCRET :\nIllustration pratique du quotidien liée à ce sujet.`;
         document.getElementById('input-fullnotes').value = cleanFallback;
         document.getElementById('input-punchline').value = fullText.split('.')[0] || title;
@@ -2379,84 +1250,6 @@ Notes brutes : """${fullText || title}"""`;
         if (e.message === "NO_API_KEY") {
           showToast("Mise en page effectuée (mode local)");
         }
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = origText;
-      }
-    }
-
-    async function distillNotesWithAI() {
-      const fullText = document.getElementById('input-fullnotes').value.trim();
-      const title = document.getElementById('input-title').value.trim();
-      if (!fullText && !title) {
-        showToast("Renseigne au moins un titre ou des notes.");
-        return;
-      }
-
-      const btn = document.getElementById('btn-distill-ai');
-      const origText = btn.innerHTML;
-      btn.disabled = true;
-      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-amber-300"></i><span>Nettoyage & Structuration...</span>`;
-
-      const systemPrompt = `Tu es un expert pédagogique. Réorganise, corrige l'orthographe et aère la note ("cleanNotes") selon cette structure claire avec des sauts de ligne systématiques :
-
-🎯 EN BREF :
-[Principe central expliqué simplement]
-
-⚙️ POINTS CLÉS :
-• [Point 1]
-• [Point 2]
-
-💡 EXEMPLE CONCRET :
-[Un exemple parlant du quotidien ou cas réel pour ancrer l'idée et ne pas rester dans l'abstrait]
-
-Crée également 1 punchline percutante ("punchline") et 2-3 questions variées pour la révision ("questions").`;
-
-      const userQuery = `Titre : ${title}\nNotes brutes : """${fullText || title}"""`;
-
-      try {
-        const apiKey = "";
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
-
-        const payload = {
-          contents: [{ parts: [{ text: userQuery }] }],
-          systemInstruction: { parts: [{ text: systemPrompt }] },
-          generationConfig: {
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: "OBJECT",
-              properties: {
-                cleanNotes: { type: "STRING" },
-                punchline: { type: "STRING" },
-                questions: { type: "ARRAY", items: { type: "STRING" } }
-              },
-              required: ["cleanNotes", "punchline", "questions"]
-            }
-          }
-        };
-
-        const res = await fetch(apiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        const data = await res.json();
-        const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (jsonText) {
-          const parsed = JSON.parse(jsonText);
-          if (parsed.cleanNotes) document.getElementById('input-fullnotes').value = parsed.cleanNotes;
-          if (parsed.punchline) document.getElementById('input-punchline').value = parsed.punchline;
-          if (parsed.questions) renderQuestionFields(parsed.questions);
-          showToast("Notes nettoyées avec exemple et mise en page claire !");
-        }
-      } catch (e) {
-        // Fallback local structuré
-        const cleanFallback = `🎯 EN BREF :\n${title || 'Concept'}\n\n⚙️ POINTS CLÉS :\n• ${fullText.split('.')[0] || 'Idée principale'}.\n\n💡 EXEMPLE CONCRET :\nIllustration pratique du quotidien liée à ce sujet.`;
-        document.getElementById('input-fullnotes').value = cleanFallback;
-        document.getElementById('input-punchline').value = fullText.split('.')[0] || title;
-        renderQuestionFields([`Quel est l'essentiel de : ${title} ?`, `Quel exemple concret permet d'illustrer ce concept ?`]);
-        showToast("Mise en page effectuée");
       } finally {
         btn.disabled = false;
         btn.innerHTML = origText;
