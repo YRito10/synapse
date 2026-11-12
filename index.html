@@ -861,8 +861,13 @@
         throw new Error("NO_API_KEY");
       }
 
-      // Compatible avec les nouvelles clés Google AI Studio (AQ.) et les anciennes (AIzaSy...)
-      const models = ["gemini-2.5-flash", "gemini-flash-latest"];
+      // Modèles Gemini 3 actifs pour les nouvelles clés Google AI Studio (AQ. / AIzaSy...)
+      const models = [
+        "gemini-3.5-flash-lite",
+        "gemini-3.8-flash",
+        "gemini-3.6-flash",
+        "gemini-3-flash-preview"
+      ];
       let firstError = null;
 
       for (const model of models) {
@@ -904,7 +909,9 @@
           if (!res.ok) {
             const msg = data?.error?.message || `HTTP ${res.status}`;
             if (!firstError) firstError = msg;
-            if (res.status === 400 || res.status === 403) break;
+            // Arrêt immédiat uniquement si la clé API est invalide
+            if (res.status === 401 || (res.status === 403 && msg.toLowerCase().includes('api key'))) break;
+            // Sinon (404 modèle indisponible ou quota), on passe au modèle suivant
             continue;
           }
 
@@ -1855,7 +1862,7 @@ Génère en JSON :
           ]);
           showToast("Transcription analysée et structurée ! 📝");
         } else {
-          document.getElementById('input-fullnotes').value = `🎯 EN BREF :\nVidéo "${finalTitle}" par ${realAuthor || 'YouTube'}.\n\n⚙️ POINTS CLÉS :\n• [Complète ici ou colle la transcription de la vidéo au-dessus]\n\n💡 INFO IA :\nPour activer l'analyse automatique IA sur GitHub, renseigne une clé Google AI Studio (AIzaSy...) dans "Synchro Cloud".`;
+          document.getElementById('input-fullnotes').value = `🎯 EN BREF :\nVidéo "${finalTitle}" par ${realAuthor || 'YouTube'}.\n\n⚙️ POINTS CLÉS :\n• [Complète ici ou colle la transcription de la vidéo au-dessus]\n\n💡 INFO IA :\nPour activer l'analyse automatique IA sur GitHub, renseigne une clé Google AI Studio (AQ... ou AIzaSy...) dans "Synchro Cloud".`;
           document.getElementById('input-punchline').value = `L'essentiel à retenir de « ${finalTitle} ».`;
           renderQuestionFields([`Quel est le message central de "${finalTitle}" ?`]);
           if (e.message === "NO_API_KEY") {
