@@ -609,10 +609,13 @@
         </div>
 
         <!-- Champ d'URL YouTube (Flash Récap) -->
-        <div id="youtube-url-box" class="hidden p-3 rounded-xl bg-red-950/20 border border-red-500/30 space-y-2">
-          <label class="font-semibold text-red-300 flex items-center gap-1.5">
-            <i class="fa-brands fa-youtube"></i>
-            <span>Flash Récap YouTube par lien</span>
+        <div id="youtube-url-box" class="hidden p-3 rounded-xl bg-red-950/20 border border-red-500/30 space-y-2.5">
+          <label class="font-semibold text-red-300 flex items-center justify-between">
+            <span class="flex items-center gap-1.5">
+              <i class="fa-brands fa-youtube"></i>
+              <span>Flash Récap YouTube</span>
+            </span>
+            <span class="text-[10px] text-red-400/80 font-normal">Titre auto + Analyse</span>
           </label>
           <div class="flex items-center space-x-2">
             <input type="url" id="input-youtube-url" placeholder="Coller le lien YouTube (https://youtu.be/...)" class="w-full bg-[#0d0e12] border border-zinc-800 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:border-red-500">
@@ -621,6 +624,11 @@
               <span>Analyser</span>
             </button>
           </div>
+          <!-- Zone optionnelle pour coller la transcription ou le descriptif -->
+          <details class="text-[11px] text-zinc-400">
+            <summary class="cursor-pointer hover:text-zinc-200 select-none font-medium">+ Coller la transcription ou le résumé de la vidéo (recommandé)</summary>
+            <textarea id="input-youtube-transcript" rows="3" placeholder="Sur YouTube : clique sur '...plus' dans la description > 'Afficher la transcription', copie le texte et colle-le ici pour une analyse exacte du contenu..." class="mt-2 w-full bg-[#0d0e12] border border-zinc-800 rounded-lg p-2.5 text-white text-xs focus:outline-none focus:border-red-500"></textarea>
+          </details>
         </div>
 
         <!-- Champ Sujet/Concept pour IA -->
@@ -778,6 +786,24 @@
             </button>
           </div>
           <p class="text-[11px] text-zinc-500">Toutes vos notes s'enregistrent automatiquement dans le cloud pour cet identifiant.</p>
+        </div>
+
+        <!-- Configuration Clé API Gemini (Pour que l'IA fonctionne sur GitHub) -->
+        <div class="space-y-2 bg-[#0d0e12] p-3.5 rounded-xl border border-zinc-800">
+          <div class="flex items-center justify-between">
+            <label class="font-semibold text-brand-300 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+              <i class="fa-solid fa-key"></i>
+              <span>Clé API Google Gemini (IA)</span>
+            </label>
+            <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-[10px] text-brand-400 hover:underline">Obtenir une clé gratuite ↗</a>
+          </div>
+          <div class="flex items-center space-x-2">
+            <input type="password" id="gemini-api-key-input" placeholder="Coller votre clé AIzaSy..." class="w-full bg-[#15161c] border border-zinc-800 rounded-lg px-3 py-2 text-white font-mono text-[11px] focus:outline-none focus:border-brand-500">
+            <button onclick="saveGeminiApiKey()" class="px-3 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-lg font-bold shrink-0 transition text-[11px]">
+              Sauver
+            </button>
+          </div>
+          <p class="text-[11px] text-zinc-500">Nécessaire uniquement lorsque l'application est hébergée sur GitHub pour activer la génération IA réelle.</p>
         </div>
 
         <!-- Export / Import Local -->
@@ -974,7 +1000,27 @@
       renderDashboard();
       renderNotesList();
       updateDueBadges();
+      loadGeminiApiKeyUI();
     };
+
+    function getGeminiApiKey() {
+      return localStorage.getItem('synapse_gemini_api_key') || "";
+    }
+
+    function loadGeminiApiKeyUI() {
+      const input = document.getElementById('gemini-api-key-input');
+      if (input) {
+        input.value = getGeminiApiKey();
+      }
+    }
+
+    function saveGeminiApiKey() {
+      const input = document.getElementById('gemini-api-key-input');
+      if (!input) return;
+      const val = input.value.trim();
+      localStorage.setItem('synapse_gemini_api_key', val);
+      showToast(val ? "Clé API Gemini enregistrée ! ✨" : "Clé API supprimée.");
+    }
 
     function copySyncId() {
       const field = document.getElementById('sync-user-id-field');
@@ -1879,8 +1925,8 @@ Extrais ou génère en JSON :
 6. "questions": 3 questions de révision variées (sur le principe de base, l'exemple et la nuance).`;
 
       try {
-        const apiKey = "";
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+        const apiKey = getGeminiApiKey();
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
         const payload = {
           contents: [{ parts: [{ text: promptMsg }] }],
@@ -1969,10 +2015,12 @@ Ne pas réduire cette approche à un cas isolé, mais l'envisager comme un syst�
     // FLASH RÉCAP YOUTUBE VIA URL
     async function flashRecapYouTube() {
       const urlInput = document.getElementById('input-youtube-url');
+      const transcriptInput = document.getElementById('input-youtube-transcript');
       const url = urlInput ? urlInput.value.trim() : '';
+      const rawTranscript = transcriptInput ? transcriptInput.value.trim() : '';
 
-      if (!url) {
-        showToast("Veuillez coller un lien YouTube valide.");
+      if (!url && !rawTranscript) {
+        showToast("Veuillez coller un lien YouTube ou une transcription.");
         return;
       }
 
@@ -1988,6 +2036,8 @@ Ne pas réduire cette approche à un cas isolé, mais l'envisager comme un syst�
           videoId = url.split('youtu.be/')[1].split('?')[0];
         } else if (url.includes('watch?v=')) {
           videoId = new URL(url).searchParams.get('v');
+        } else if (url.includes('shorts/')) {
+          videoId = url.split('shorts/')[1].split('?')[0];
         }
       } catch (err) {
         videoId = null;
@@ -1996,18 +2046,20 @@ Ne pas réduire cette approche à un cas isolé, mais l'envisager comme un syst�
       // 1. Récupération préalable des vraies métadonnées YouTube (Titre exact & Nom de chaîne) via oEmbed officiel
       let realTitle = "";
       let realAuthor = "";
-      try {
-        const oembedUrl = `https://noembed.com/embed?url=${encodeURIComponent(url)}`;
-        const oembedRes = await fetch(oembedUrl);
-        if (oembedRes.ok) {
-          const oembedData = await oembedRes.json();
-          if (oembedData && oembedData.title) {
-            realTitle = oembedData.title;
-            realAuthor = oembedData.author_name || "";
+      if (url) {
+        try {
+          const oembedUrl = `https://noembed.com/embed?url=${encodeURIComponent(url)}`;
+          const oembedRes = await fetch(oembedUrl);
+          if (oembedRes.ok) {
+            const oembedData = await oembedRes.json();
+            if (oembedData && oembedData.title) {
+              realTitle = oembedData.title;
+              realAuthor = oembedData.author_name || "";
+            }
           }
+        } catch (err) {
+          console.warn("oEmbed indisponible, tentative par analyse directe", err);
         }
-      } catch (err) {
-        console.warn("oEmbed indisponible, tentative par analyse directe", err);
       }
 
       if (realTitle) {
@@ -2015,10 +2067,15 @@ Ne pas réduire cette approche à un cas isolé, mais l'envisager comme un syst�
         document.getElementById('input-reference').value = realAuthor ? `${realAuthor} (${url})` : url;
       }
 
+      const transcriptContext = rawTranscript 
+        ? `\nVoici la transcription / le contenu réel de la vidéo à synthétiser fidèlement :\n"""${rawTranscript.slice(0, 12000)}"""` 
+        : `\n(Aucune transcription fournie : base-toi sur le titre exact, le sujet de la chaîne et tes connaissances sur cette vidéo/thématique pour en extraire les concepts majeurs).`;
+
       const contextualizedPrompt = `Analyse cette vidéo YouTube :
 Titre : "${realTitle || 'Vidéo YouTube'}"
 Chaîne / Auteur : "${realAuthor || 'Inconnu'}"
 Lien : "${url}"
+${transcriptContext}
 
 Rédige une fiche d'apprentissage ultra-claire, structurée et ancrée dans le réel pour "cleanNotes".
 RÈGLES D'ORGANISATION (sauts de ligne obligatoires) :
@@ -2028,6 +2085,7 @@ RÈGLES D'ORGANISATION (sauts de ligne obligatoires) :
 ⚙️ POINTS CLÉS :
 • [Argument majeur 1]
 • [Argument majeur 2]
+• [Argument majeur 3]
 
 💡 EXEMPLE OU CAS PRATIQUE MENTIONNÉ :
 [L'exemple, l'expérience ou l'histoire marquante citée dans la vidéo pour illustrer le propos]
@@ -2043,8 +2101,120 @@ Génère en JSON :
 5. "questions": 2 à 3 questions de révision variées`;
 
       try {
-        const apiKey = "";
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+        const apiKey = getGeminiApiKey();
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+
+        const payload = {
+          contents: [{ parts: [{ text: contextualizedPrompt }] }],
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "OBJECT",
+              properties: {
+                title: { type: "STRING" },
+                channel: { type: "STRING" },
+                cleanNotes: { type: "STRING" },
+                punchline: { type: "STRING" },
+                questions: { type: "ARRAY", items: { type: "STRING" } }
+              },
+              required: ["title", "channel", "cleanNotes", "punchline", "questions"]
+            }
+          }
+        };
+
+        const res = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) throw new Error("API Key missing or error");
+
+        const data = await res.json();
+        const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (jsonText) {
+          const parsed = JSON.parse(jsonText);
+          if (parsed.title) document.getElementById('input-title').value = parsed.title;
+          if (parsed.channel) document.getElementById('input-reference').value = url ? `${parsed.channel} (${url})` : parsed.channel;
+          if (parsed.cleanNotes) document.getElementById('input-fullnotes').value = parsed.cleanNotes;
+          if (parsed.punchline) document.getElementById('input-punchline').value = parsed.punchline;
+          if (parsed.questions) renderQuestionFields(parsed.questions);
+          showToast("Analyse IA de la vidéo réussie ! 🎥✨");
+        } else {
+          throw new Error("No data");
+        }
+      } catch (e) {
+        const finalTitle = realTitle || (videoId ? `Vidéo YouTube (${videoId})` : "Vidéo YouTube");
+        const finalAuthor = realAuthor ? (url ? `${realAuthor} (${url})` : realAuthor) : url;
+
+        document.getElementById('input-title').value = finalTitle;
+        document.getElementById('input-reference').value = finalAuthor;
+
+        // Extraction locale intelligente si l'utilisateur a collé la transcription sans clé API
+        if (rawTranscript.length > 40) {
+          const sentences = rawTranscript
+            .replace(/\d{1,2}:\d{2}/g, '') // Nettoyer les timecodes (ex: 02:15)
+            .split(/[.!?]+/)
+            .map(s => s.trim())
+            .filter(s => s.length > 35 && s.length < 220);
+
+          const pt1 = sentences[0] || "Premier point clé abordé dans la vidéo.";
+          const pt2 = sentences[Math.floor(sentences.length * 0.4)] || "Développement principal de l'argumentation.";
+          const pt3 = sentences[Math.floor(sentences.length * 0.75)] || "Conclusion pratique de la présentation.";
+
+          document.getElementById('input-fullnotes').value = `🎯 EN BREF :\nSynthèse extraite de la transcription de "${finalTitle}".\n\n⚙️ POINTS CLÉS EXTRAITS :\n• ${pt1}.\n• ${pt2}.\n• ${pt3}.\n\n💡 EXEMPLE / PASSAGE MARQUANT :\n"${sentences[1] || pt1}."\n\n⚠️ ASTUCE :\nAjoute ta clé API Gemini gratuite dans "Synchro Cloud" pour une synthèse IA complète.`;
+          document.getElementById('input-punchline').value = `${pt1}.`;
+          renderQuestionFields([
+            `Quelle est l'idée principale développée dans "${finalTitle}" ?`,
+            `Quel argument clé ressort de cette vidéo de ${realAuthor || 'la chaîne'} ?`
+          ]);
+          showToast("Transcription analysée et structurée ! 📝");
+        } else {
+          document.getElementById('input-fullnotes').value = `🎯 EN BREF :\nVidéo "${finalTitle}" par ${realAuthor || 'YouTube'}.\n\n⚙️ POINTS CLÉS :\n• [Complète ici ou colle la transcription de la vidéo au-dessus]\n\n💡 INFO IA :\nPour que l'IA analyse automatiquement n'importe quelle vidéo sur GitHub, ajoute ta clé API gratuite dans "Synchro Cloud" en haut à droite.`;
+          document.getElementById('input-punchline').value = `L'essentiel à retenir de « ${finalTitle} ».`;
+          renderQuestionFields([
+            `Quel est le message central de "${finalTitle}" ?`
+          ]);
+          showToast("Titre récupéré ! Ajoute ta clé API dans Synchro Cloud pour l'analyse IA.", "info");
+        }
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = origText;
+      }
+    }
+
+    async function distillNotesWithAI() {
+      const fullText = document.getElementById('input-fullnotes').value.trim();
+      const title = document.getElementById('input-title').value.trim();
+      if (!fullText && !title) {
+        showToast("Renseigne au moins un titre ou des notes.");
+        return;
+      }
+
+      const btn = document.getElementById('btn-distill-ai');
+      const origText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-amber-300"></i><span>Nettoyage & Structuration...</span>`;
+
+      const systemPrompt = `Tu es un expert pédagogique. Réorganise, corrige l'orthographe et aère la note ("cleanNotes") selon cette structure claire avec des sauts de ligne systématiques :
+
+🎯 EN BREF :
+[Principe central expliqué simplement]
+
+⚙️ POINTS CLÉS :
+• [Point 1]
+• [Point 2]
+
+💡 EXEMPLE CONCRET :
+[Un exemple parlant du quotidien ou cas réel pour ancrer l'idée et ne pas rester dans l'abstrait]
+
+Crée également 1 punchline percutante ("punchline") et 2-3 questions variées pour la révision ("questions").`;
+
+      const userQuery = `Titre : ${title}\nNotes brutes : """${fullText || title}"""`;
+
+      try {
+        const apiKey = getGeminiApiKey();
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
         const payload = {
           contents: [{ parts: [{ text: contextualizedPrompt }] }],
