@@ -861,8 +861,25 @@
         throw new Error("NO_API_KEY");
       }
 
-      const models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
-      let lastError = "Erreur de connexion API";
+      // Liste des modèles actuels + détection dynamique des modèles compatibles avec la clé
+      let models = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"];
+      try {
+        const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`);
+        if (listRes.ok) {
+          const listData = await listRes.json();
+          const available = (listData.models || [])
+            .filter(m => (m.supportedGenerationMethods || []).includes("generateContent") && m.name.includes("gemini"))
+            .map(m => m.name.replace("models/", ""));
+          if (available.length > 0) {
+            const preferred = available.filter(m => m.includes("flash"));
+            models = [...new Set([...preferred, ...available])];
+          }
+        }
+      } catch (e) {
+        // On conserve la liste par défaut si le listing est bloqué
+      }
+
+      let firstError = null;
 
       for (const model of models) {
         try {
@@ -870,8 +887,7 @@
           const res = await fetch(url, {
             method: "POST",
             headers: {
-              "Content-Type": "application/json",
-              "x-goog-api-key": apiKey
+              "Content-Type": "application/json"
             },
             body: JSON.stringify({
               contents: [{ parts: [{ text: promptText }] }],
@@ -884,7 +900,7 @@
 
           const data = await res.json();
           if (!res.ok) {
-            lastError = data?.error?.message || `HTTP ${res.status}`;
+            if (!firstError) firstError = data?.error?.message || `HTTP ${res.status}`;
             continue;
           }
 
@@ -893,11 +909,11 @@
             return JSON.parse(rawText);
           }
         } catch (err) {
-          lastError = err.message || lastError;
+          if (!firstError) firstError = err.message;
         }
       }
 
-      throw new Error(lastError);
+      throw new Error(firstError || "Impossible de joindre l'API Gemini");
     }
 
     // ==========================================
