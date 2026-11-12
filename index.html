@@ -16,9 +16,8 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, collection, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-    // Configuration Firebase globale fournie par l'environnement
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'synapse-personal-brain';
     const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
 
@@ -49,7 +48,6 @@
       initAuth();
     }
 
-    // Expose aux fonctions globales
     window.cloudSave = async function(dataNotes, dataTaxonomy) {
       if (!db || !currentUser) return false;
       try {
@@ -71,8 +69,7 @@
       const userDocRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'brain', 'current');
       onSnapshot(userDocRef, (docSnap) => {
         if (docSnap.exists()) {
-          const val = docSnap.data();
-          callback(val);
+          callback(docSnap.data());
         }
       }, (err) => {
         console.warn("Erreur écoute cloud", err);
@@ -103,11 +100,6 @@
               500: '#8b5cf6',
               600: '#7c3aed',
               700: '#6d28d9',
-            },
-            surface: {
-              50: '#18181b', // Fond cartes épurées
-              100: '#27272a',
-              border: '#27272a',
             }
           }
         }
@@ -115,43 +107,22 @@
     }
   </script>
   <style>
-    /* Cartes Flashcard 3D flip */
-    .perspective-1000 {
-      perspective: 1000px;
-    }
-    .transform-style-3d {
-      transform-style: preserve-3d;
-    }
-    .backface-hidden {
-      backface-visibility: hidden;
-      -webkit-backface-visibility: hidden;
-    }
-    .rotate-y-180 {
-      transform: rotateY(180deg);
-    }
-    /* Masquer la scrollbar tout en conservant le scroll fluide */
-    .no-scrollbar::-webkit-scrollbar {
-      display: none;
-    }
-    .no-scrollbar {
-      -ms-overflow-style: none;
-      scrollbar-width: none;
-    }
-    /* Touch target confort Apple standard */
-    .tap-target {
-      min-height: 44px;
-      min-width: 44px;
-    }
+    .perspective-1000 { perspective: 1000px; }
+    .transform-style-3d { transform-style: preserve-3d; }
+    .backface-hidden { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+    .rotate-y-180 { transform: rotateY(180deg); }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    .tap-target { min-height: 44px; min-width: 44px; }
   </style>
 </head>
 <body class="h-full bg-[#0d0e12] text-zinc-100 font-sans antialiased flex flex-col md:flex-row overflow-hidden selection:bg-brand-600 selection:text-white">
 
   <!-- =============================== -->
-  <!-- NAVIGATION LATERALE (Desktop uniquement) -->
+  <!-- NAVIGATION LATERALE (Desktop)   -->
   <!-- =============================== -->
   <aside class="hidden md:flex flex-col w-64 bg-[#121318] border-r border-zinc-800/60 p-6 shrink-0 justify-between select-none">
     <div class="space-y-8">
-      <!-- Logo Minimaliste -->
       <div class="flex items-center space-x-3">
         <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-brand-500/20 font-bold">
           <i class="fa-solid fa-brain text-sm"></i>
@@ -159,7 +130,6 @@
         <span class="font-extrabold text-base tracking-tight text-white">Synapse</span>
       </div>
 
-      <!-- Navigation Desktop -->
       <nav class="space-y-1.5">
         <button onclick="switchTab('dashboard')" id="nav-dashboard" class="w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all text-white bg-zinc-800/80">
           <i class="fa-solid fa-house-chimney w-5 text-zinc-400"></i>
@@ -170,7 +140,7 @@
             <i class="fa-solid fa-bolt-lightning w-5 text-amber-400"></i>
             <span>Session 5 min</span>
           </div>
-          <span id="badge-due-count" class="bg-zinc-800 text-amber-400 text-xs px-2 py-0.5 rounded-full font-bold">5</span>
+          <span id="badge-due-count" class="bg-zinc-800 text-amber-400 text-xs px-2 py-0.5 rounded-full font-bold">0</span>
         </button>
         <button onclick="switchTab('notes')" id="nav-notes" class="w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all text-zinc-400 hover:text-white hover:bg-zinc-800/40">
           <i class="fa-solid fa-layer-group w-5 text-zinc-400"></i>
@@ -178,19 +148,17 @@
         </button>
       </nav>
 
-      <!-- Liste Catégories Minimaliste -->
       <div class="pt-4 border-t border-zinc-800/50">
         <div class="flex items-center justify-between text-xs font-semibold text-zinc-400 mb-3 uppercase tracking-wider">
           <span>Catégories</span>
-          <button onclick="openManageTaxonomyModal()" class="hover:text-brand-400 text-zinc-400 p-1" title="Gérer ou ajouter une catégorie"><i class="fa-solid fa-plus"></i></button>
+          <button onclick="openManageTaxonomyModal()" class="hover:text-brand-400 text-zinc-400 p-1" title="Gérer ou ajouter une catégorie">
+            <i class="fa-solid fa-plus"></i>
+          </button>
         </div>
-        <div id="desktop-category-list" class="space-y-1 text-sm text-zinc-400 max-h-48 overflow-y-auto no-scrollbar">
-          <!-- Dynamique -->
-        </div>
+        <div id="desktop-category-list" class="space-y-1 text-sm text-zinc-400 max-h-48 overflow-y-auto no-scrollbar"></div>
       </div>
     </div>
 
-    <!-- Bouton CTA Desktop -->
     <button onclick="openNoteModal()" class="w-full flex items-center justify-center space-x-2 py-3 bg-brand-600 hover:bg-brand-500 rounded-xl font-semibold text-sm transition text-white shadow-lg shadow-brand-600/20 active:scale-95">
       <i class="fa-solid fa-plus text-xs"></i>
       <span>Nouvelle Fiche</span>
@@ -198,14 +166,12 @@
   </aside>
 
   <!-- =============================== -->
-  <!-- CONTENU PRINCIPAL ÉPURÉ -->
+  <!-- CONTENU PRINCIPAL               -->
   <!-- =============================== -->
   <main class="flex-1 flex flex-col h-full overflow-hidden bg-[#0d0e12]">
 
-    <!-- En-tête simple et aéré -->
     <header class="h-14 sm:h-16 px-4 sm:px-8 border-b border-zinc-800/40 flex items-center justify-between shrink-0 bg-[#0d0e12]/80 backdrop-blur-md z-10">
       <div class="flex items-center space-x-3">
-        <!-- Logo mobile compact -->
         <div class="md:hidden w-8 h-8 rounded-lg bg-brand-600 flex items-center justify-center text-white text-xs font-bold">
           <i class="fa-solid fa-brain"></i>
         </div>
@@ -215,9 +181,8 @@
         </div>
       </div>
 
-      <!-- Actions Header -->
       <div class="flex items-center space-x-2">
-        <button onclick="openSyncModal()" class="flex items-center space-x-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 px-2.5 py-1.5 rounded-lg text-xs font-medium transition" title="Synchroniser / Sauvegarder">
+        <button onclick="openSyncModal()" class="flex items-center space-x-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 px-2.5 py-1.5 rounded-lg text-xs font-medium transition" title="Synchroniser / Sauvegarder / Clé API">
           <i class="fa-solid fa-cloud text-brand-400"></i>
           <span class="hidden sm:inline">Synchro Cloud</span>
         </button>
@@ -232,15 +197,10 @@
       </div>
     </header>
 
-    <!-- Zone Défilable -->
     <div id="content-container" class="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6 max-w-4xl mx-auto w-full no-scrollbar pb-24 md:pb-8">
 
-      <!-- ========================================== -->
-      <!-- VUE 1 : AUJOURD'HUI (ACCUEIL NET & ÉPURÉ) -->
-      <!-- ========================================== -->
+      <!-- VUE 1 : AUJOURD'HUI -->
       <section id="view-dashboard" class="space-y-6">
-
-        <!-- CARTE D'ACTION UNIQUE : LA SESSION 5 MIN -->
         <div class="bg-gradient-to-b from-[#181920] to-[#121318] border border-zinc-800/80 rounded-2xl p-5 sm:p-6 shadow-sm">
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div class="space-y-1">
@@ -253,7 +213,7 @@
             </div>
             
             <div class="flex items-center gap-2">
-              <button onclick="startRandomEcho()" class="tap-target px-3.5 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-medium text-xs rounded-xl transition flex items-center justify-center space-x-1.5 border border-zinc-700/60" title="Tirer une note oubliée au hasard">
+              <button onclick="startRandomEcho()" class="tap-target px-3.5 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-medium text-xs rounded-xl transition flex items-center justify-center space-x-1.5 border border-zinc-700/60" title="Tirer une note au hasard">
                 <i class="fa-solid fa-shuffle text-xs text-brand-400"></i>
                 <span class="hidden sm:inline">Écho Aléatoire</span>
               </button>
@@ -265,7 +225,6 @@
           </div>
         </div>
 
-        <!-- CITATION / PUNCHLINE DU JOUR (UNE SEULE ET ÉPURÉE) -->
         <div class="relative bg-[#13141a] border border-zinc-800/60 rounded-2xl p-5 space-y-3">
           <div class="flex items-center justify-between text-xs text-zinc-400">
             <span class="font-medium tracking-wide text-brand-400 flex items-center gap-1.5">
@@ -283,41 +242,29 @@
 
           <div class="flex items-center justify-between text-xs text-zinc-400 pt-1">
             <span id="daily-punchline-source" class="font-medium text-zinc-300 truncate">James Clear</span>
-            <span id="daily-punchline-category" class="text-[11px] bg-zinc-800/70 text-zinc-300 px-2 py-0.5 rounded-md">Histoire</span>
+            <span id="daily-punchline-category" class="text-[11px] bg-zinc-800/70 text-zinc-300 px-2 py-0.5 rounded-md">Lectures</span>
           </div>
         </div>
 
-        <!-- CATÉGORIES EN BARRE DE SCROLL HORIZONTAL (EXPÉRIENCE MOBILE OPTIMALE) -->
         <div class="space-y-2.5">
           <div class="flex items-center justify-between">
             <h4 class="text-xs font-semibold uppercase tracking-wider text-zinc-400">Catégories</h4>
             <button onclick="switchTab('notes')" class="text-xs text-brand-400 hover:underline">Voir tout</button>
           </div>
-          <!-- Horizontal Chips / Pills -->
-          <div id="category-pills-row" class="flex items-center space-x-2 overflow-x-auto no-scrollbar py-1 -mx-4 px-4 sm:mx-0 sm:px-0">
-            <!-- Dynamique -->
-          </div>
+          <div id="category-pills-row" class="flex items-center space-x-2 overflow-x-auto no-scrollbar py-1 -mx-4 px-4 sm:mx-0 sm:px-0"></div>
         </div>
 
-        <!-- DERNIÈRES FICHES AJOUTÉES (CARTES LISIBLES ET COMPACTES) -->
         <div class="space-y-3">
           <div class="flex items-center justify-between">
             <h4 class="text-xs font-semibold uppercase tracking-wider text-zinc-400">Dernières captures</h4>
-            <span class="text-xs text-zinc-400" id="stat-total-notes">5 fiches</span>
+            <span class="text-xs text-zinc-400" id="stat-total-notes">0 fiches</span>
           </div>
-          <div id="dashboard-recent-notes" class="space-y-2.5">
-            <!-- Injecté dynamiquement -->
-          </div>
+          <div id="dashboard-recent-notes" class="space-y-2.5"></div>
         </div>
-
       </section>
 
-      <!-- ========================================== -->
-      <!-- VUE 2 : SESSION INTERACTIVE (FOCUS TOTAL) -->
-      <!-- ========================================== -->
+      <!-- VUE 2 : SESSION INTERACTIVE -->
       <section id="view-review" class="hidden max-w-xl mx-auto space-y-5">
-        
-        <!-- En-tête session : minimaliste -->
         <div class="flex items-center justify-between text-xs text-zinc-400">
           <button onclick="switchTab('dashboard')" class="hover:text-white flex items-center space-x-1.5">
             <i class="fa-solid fa-chevron-left text-[10px]"></i>
@@ -330,38 +277,26 @@
           </div>
         </div>
 
-        <!-- Barre de progression discrète -->
         <div class="w-full bg-zinc-800/80 h-1 rounded-full overflow-hidden">
           <div id="review-progress-bar" class="bg-brand-500 h-full w-1/5 transition-all duration-300"></div>
         </div>
 
-        <!-- FLASHCARD 3D TACTILE -->
         <div id="review-flashcard-box" class="perspective-1000 min-h-[300px] cursor-pointer" onclick="flipFlashcard()">
           <div id="flashcard-inner" class="relative w-full h-80 rounded-2xl transition-transform duration-500 transform-style-3d shadow-lg">
-            
             <!-- RECTO -->
             <div class="absolute inset-0 w-full h-full bg-[#15161c] border border-zinc-800 rounded-2xl p-6 flex flex-col justify-between backface-hidden">
               <div class="flex items-center justify-between text-xs text-zinc-400">
-                <span id="card-hierarchy" class="font-medium text-zinc-400">Histoire</span>
-                <span id="card-source-tag" class="truncate max-w-[150px]">Livre</span>
+                <span id="card-hierarchy" class="font-medium text-zinc-400">Catégorie</span>
+                <span id="card-source-tag" class="truncate max-w-[150px]">Source</span>
               </div>
-
               <div class="my-auto text-center space-y-3 px-2">
-                <p id="card-question-text" class="text-base sm:text-lg font-bold text-white leading-relaxed">
-                  Question mémorielle
-                </p>
-                <!-- Astuce Feynman -->
+                <p id="card-question-text" class="text-base sm:text-lg font-bold text-white leading-relaxed">Question mémorielle</p>
                 <div class="p-2.5 bg-zinc-900/80 rounded-xl border border-zinc-800 text-[11px] text-zinc-400 max-w-sm mx-auto">
                   💡 <span class="text-zinc-300 font-medium">Auto-test :</span> Formule ta réponse mentalement en 1 phrase avant de retourner la carte.
                 </div>
-                <span class="inline-block text-[11px] text-brand-300 border border-brand-500/30 bg-brand-500/10 px-3.5 py-1 rounded-full font-medium">
-                  Toucher pour révéler
-                </span>
+                <span class="inline-block text-[11px] text-brand-300 border border-brand-500/30 bg-brand-500/10 px-3.5 py-1 rounded-full font-medium">Toucher pour révéler</span>
               </div>
-
-              <div class="text-[11px] text-zinc-500 text-center">
-                Flashcard Recto
-              </div>
+              <div class="text-[11px] text-zinc-500 text-center">Flashcard Recto</div>
             </div>
 
             <!-- VERSO -->
@@ -373,46 +308,28 @@
                   <span>Copier</span>
                 </button>
               </div>
-
               <div class="my-auto space-y-3">
-                <p id="card-answer-punchline" class="text-base sm:text-lg font-bold text-white leading-relaxed">
-                  « Réponse mémorable »
-                </p>
-                <div id="card-fullnote-preview" class="p-3 bg-black/40 rounded-xl text-xs text-zinc-300 max-h-24 overflow-y-auto no-scrollbar font-normal leading-relaxed">
-                  Note détaillée...
-                </div>
+                <p id="card-answer-punchline" class="text-base sm:text-lg font-bold text-white leading-relaxed">« Réponse mémorable »</p>
+                <div id="card-fullnote-preview" class="p-3 bg-black/40 rounded-xl text-xs text-zinc-300 max-h-24 overflow-y-auto no-scrollbar font-normal leading-relaxed whitespace-pre-line">Note détaillée...</div>
               </div>
-
-              <div class="text-[11px] text-zinc-500 text-center">
-                Flashcard Verso
-              </div>
+              <div class="text-[11px] text-zinc-500 text-center">Flashcard Verso</div>
             </div>
-
           </div>
         </div>
 
-        <!-- ZONE QUIZZ QCM -->
         <div id="review-quiz-box" class="hidden bg-[#15161c] border border-zinc-800 rounded-2xl p-5 sm:p-6 space-y-4">
           <div class="flex items-center justify-between text-xs text-zinc-400">
             <span class="text-amber-400 font-semibold">Quizz Express</span>
             <span id="quiz-source-tag" class="truncate max-w-[140px]">Source</span>
           </div>
-
-          <h4 id="quiz-question-text" class="text-base font-bold text-white leading-snug">
-            Question
-          </h4>
-
-          <div id="quiz-options-container" class="space-y-2.5 pt-1">
-            <!-- Options dynamiques -->
-          </div>
-
+          <h4 id="quiz-question-text" class="text-base font-bold text-white leading-snug">Question</h4>
+          <div id="quiz-options-container" class="space-y-2.5 pt-1"></div>
           <div id="quiz-explanation-box" class="hidden p-3.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs space-y-1">
             <span class="text-zinc-400 font-semibold">L'essentiel :</span>
             <p id="quiz-explanation-text" class="text-zinc-200"></p>
           </div>
         </div>
 
-        <!-- Boutons d'auto-évaluation Flashcard (Grands pour les doigts) -->
         <div id="flashcard-actions" class="grid grid-cols-3 gap-2 sm:gap-3 pt-1">
           <button onclick="handleCardAnswer('hard')" class="tap-target py-3 px-2 bg-zinc-900 hover:bg-rose-950/30 text-rose-400 border border-zinc-800 rounded-xl text-xs font-semibold flex flex-col items-center justify-center space-y-1 active:scale-95 transition">
             <i class="fa-solid fa-rotate-left text-xs"></i>
@@ -428,28 +345,21 @@
           </button>
         </div>
 
-        <!-- Bouton Suivant pour le Quizz -->
         <div id="quiz-actions" class="hidden pt-1">
           <button id="quiz-next-btn" onclick="nextCard()" disabled class="tap-target w-full py-3.5 bg-brand-600 disabled:opacity-40 hover:bg-brand-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center space-x-2">
             <span>Continuer</span>
             <i class="fa-solid fa-arrow-right text-[11px]"></i>
           </button>
         </div>
-
       </section>
 
-      <!-- ========================================== -->
-      <!-- VUE 3 : BIBLIOTHÈQUE / RECHERCHE -->
-      <!-- ========================================== -->
+      <!-- VUE 3 : BIBLIOTHÈQUE -->
       <section id="view-notes" class="hidden space-y-4">
-        
-        <!-- Barre de recherche épurée -->
         <div class="relative">
           <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 text-xs"></i>
           <input type="text" id="notes-search-input" oninput="renderNotesList()" placeholder="Rechercher une note, mot-clé, idée..." class="tap-target w-full bg-[#15161c] border border-zinc-800 text-white pl-9 pr-4 py-2.5 rounded-xl text-xs focus:outline-none focus:border-brand-500 transition">
         </div>
 
-        <!-- Filtres horizontaux épurés -->
         <div class="flex items-center space-x-2 overflow-x-auto no-scrollbar py-1">
           <button onclick="filterByType('all')" id="filter-type-all" class="filter-chip px-3 py-1.5 rounded-lg text-xs font-medium bg-brand-600 text-white whitespace-nowrap">Tous</button>
           <button onclick="filterByType('book')" id="filter-type-book" class="filter-chip px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-white whitespace-nowrap">📚 Livres</button>
@@ -458,7 +368,6 @@
           <button onclick="filterByType('other')" id="filter-type-other" class="filter-chip px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-white whitespace-nowrap">💡 Autres</button>
         </div>
 
-        <!-- Filtre par Catégories et Sous-Catégories (Thématiques) -->
         <div class="space-y-1.5 pt-1 border-t border-zinc-800/40">
           <div class="flex items-center justify-between text-[11px] text-zinc-400 font-medium">
             <span class="flex items-center gap-1.5">
@@ -470,30 +379,21 @@
             </span>
             <button onclick="filterByTaxonomy('all')" class="text-brand-400 hover:underline">Réinitialiser</button>
           </div>
-          <div id="taxonomy-filter-pills" class="flex items-center space-x-1.5 overflow-x-auto no-scrollbar py-1">
-            <!-- Injecté dynamiquement -->
-          </div>
+          <div id="taxonomy-filter-pills" class="flex items-center space-x-1.5 overflow-x-auto no-scrollbar py-1"></div>
         </div>
 
-        <!-- Liste des Fiches : Cartes légères & lisibles -->
-        <div id="notes-cards-container" class="space-y-3">
-          <!-- Injecté dynamiquement -->
-        </div>
-
+        <div id="notes-cards-container" class="space-y-3"></div>
       </section>
 
     </div>
 
-    <!-- =============================== -->
-    <!-- BARRE DE NAVIGATION FLOTTANTE MOBILE (Ergonomie moderne) -->
-    <!-- =============================== -->
+    <!-- BARRE DE NAVIGATION FLOTTANTE MOBILE -->
     <nav class="md:hidden fixed bottom-3 left-4 right-4 h-16 bg-[#16171f]/90 border border-zinc-800/80 rounded-2xl flex items-center justify-around px-3 z-30 shadow-2xl backdrop-blur-xl">
       <button onclick="switchTab('dashboard')" id="mobile-nav-dashboard" class="tap-target flex flex-col items-center justify-center w-14 text-brand-400">
         <i class="fa-solid fa-house text-base"></i>
         <span class="text-[10px] font-semibold mt-1">Accueil</span>
       </button>
       
-      <!-- Bouton Central Flottant Ajout (+) -->
       <button onclick="openNoteModal()" class="tap-target -mt-5 w-12 h-12 rounded-full bg-brand-600 hover:bg-brand-500 text-white flex items-center justify-center shadow-lg shadow-brand-600/40 active:scale-95 transition">
         <i class="fa-solid fa-plus text-sm"></i>
       </button>
@@ -501,7 +401,7 @@
       <button onclick="switchTab('review')" id="mobile-nav-review" class="tap-target relative flex flex-col items-center justify-center w-14 text-zinc-400">
         <div class="relative">
           <i class="fa-solid fa-bolt-lightning text-base"></i>
-          <span id="mobile-badge-due" class="absolute -top-1 -right-2 bg-amber-400 text-zinc-950 font-black text-[9px] w-3.5 h-3.5 rounded-full flex items-center justify-center">5</span>
+          <span id="mobile-badge-due" class="absolute -top-1 -right-2 bg-amber-400 text-zinc-950 font-black text-[9px] w-3.5 h-3.5 rounded-full flex items-center justify-center">0</span>
         </div>
         <span class="text-[10px] font-semibold mt-1">Réviser</span>
       </button>
@@ -513,9 +413,7 @@
     </nav>
   </main>
 
-  <!-- ======================================================== -->
   <!-- MODAL GESTION DES CATÉGORIES & THÉMATIQUES -->
-  <!-- ======================================================== -->
   <div id="taxonomy-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
     <div class="bg-[#15161c] border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-2xl w-full max-w-md max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
       <div class="px-5 py-4 border-b border-zinc-800 flex items-center justify-between shrink-0">
@@ -529,39 +427,28 @@
       </div>
 
       <div class="p-5 space-y-5 overflow-y-auto no-scrollbar flex-1 text-xs">
-        <!-- 1. Ajouter une Catégorie Principale -->
         <div class="space-y-2 bg-[#0d0e12] p-3.5 rounded-xl border border-zinc-800">
           <label class="font-semibold text-zinc-300 uppercase tracking-wider text-[10px]">Nouvelle Catégorie Principale</label>
           <div class="flex items-center space-x-2">
             <input type="text" id="new-cat-input" placeholder="Ex: Philosophie, Économie..." class="w-full bg-[#15161c] border border-zinc-800 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:border-brand-500">
-            <button onclick="handleAddCategoryFromModal()" class="px-3.5 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-lg font-bold shrink-0 transition">
-              Ajouter
-            </button>
+            <button onclick="handleAddCategoryFromModal()" class="px-3.5 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-lg font-bold shrink-0 transition">Ajouter</button>
           </div>
         </div>
 
-        <!-- 2. Ajouter une Sous-Thématique -->
         <div class="space-y-2 bg-[#0d0e12] p-3.5 rounded-xl border border-zinc-800">
           <label class="font-semibold text-zinc-300 uppercase tracking-wider text-[10px]">Nouvelle Sous-Thématique</label>
           <div class="space-y-2">
-            <select id="modal-parent-cat-select" class="w-full bg-[#15161c] border border-zinc-800 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:border-brand-500">
-              <!-- Dynamique -->
-            </select>
+            <select id="modal-parent-cat-select" class="w-full bg-[#15161c] border border-zinc-800 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:border-brand-500"></select>
             <div class="flex items-center space-x-2">
               <input type="text" id="new-sub-input" placeholder="Ex: Stoïcisme, Guerre froide..." class="w-full bg-[#15161c] border border-zinc-800 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:border-brand-500">
-              <button onclick="handleAddSubcategoryFromModal()" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold shrink-0 transition">
-                Ajouter
-              </button>
+              <button onclick="handleAddSubcategoryFromModal()" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold shrink-0 transition">Ajouter</button>
             </div>
           </div>
         </div>
 
-        <!-- Arborescence actuelle -->
         <div class="space-y-2">
-          <label class="font-semibold text-zinc-400 uppercase tracking-wider text-[10px]">Thématiques existantes</label>
-          <div id="modal-taxonomy-tree" class="space-y-2 max-h-52 overflow-y-auto no-scrollbar">
-            <!-- Dynamique -->
-          </div>
+          <label class="font-semibold text-zinc-400 uppercase tracking-wider text-[10px]">Thématiques existantes (clique sur 🗑️ ou ✕ pour supprimer)</label>
+          <div id="modal-taxonomy-tree" class="space-y-2 max-h-52 overflow-y-auto no-scrollbar"></div>
         </div>
       </div>
 
@@ -571,13 +458,9 @@
     </div>
   </div>
 
-  <!-- ======================================================== -->
-  <!-- MODAL DE CRÉATION & MODIFICATION DE FICHE (TIROIR MOBILE / MODAL DESKTOP) -->
-  <!-- ======================================================== -->
+  <!-- MODAL DE CRÉATION & MODIFICATION DE FICHE -->
   <div id="note-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
     <div class="bg-[#15161c] border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-2xl w-full max-w-lg max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
-      
-      <!-- En-tête Tiroir -->
       <div class="px-5 py-4 border-b border-zinc-800 flex items-center justify-between shrink-0">
         <h3 id="modal-title" class="font-bold text-white text-sm">Nouvelle Fiche</h3>
         <button onclick="closeNoteModal()" class="text-zinc-400 hover:text-white p-1">
@@ -585,10 +468,7 @@
         </button>
       </div>
 
-      <!-- Corps du formulaire -->
       <div class="p-5 space-y-4 overflow-y-auto no-scrollbar flex-1 text-xs">
-        
-        <!-- Sélecteur de type de média -->
         <div class="grid grid-cols-4 gap-1.5 bg-[#0d0e12] p-1 rounded-2xl border border-zinc-800">
           <button type="button" id="src-btn-book" onclick="selectSourceType('book')" class="tap-target flex items-center justify-center space-x-1 py-2 rounded-xl border border-brand-500 bg-brand-500/10 text-white font-medium transition text-[11px]">
             <i class="fa-solid fa-book text-amber-300"></i>
@@ -608,14 +488,14 @@
           </button>
         </div>
 
-        <!-- Champ d'URL YouTube (Flash Récap) -->
+        <!-- Bloc YouTube -->
         <div id="youtube-url-box" class="hidden p-3 rounded-xl bg-red-950/20 border border-red-500/30 space-y-2.5">
           <label class="font-semibold text-red-300 flex items-center justify-between">
             <span class="flex items-center gap-1.5">
               <i class="fa-brands fa-youtube"></i>
               <span>Flash Récap YouTube</span>
             </span>
-            <span class="text-[10px] text-red-400/80 font-normal">Titre auto + Analyse</span>
+            <span class="text-[10px] text-red-400/80 font-normal">Titre auto + Analyse IA</span>
           </label>
           <div class="flex items-center space-x-2">
             <input type="url" id="input-youtube-url" placeholder="Coller le lien YouTube (https://youtu.be/...)" class="w-full bg-[#0d0e12] border border-zinc-800 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:border-red-500">
@@ -624,14 +504,13 @@
               <span>Analyser</span>
             </button>
           </div>
-          <!-- Zone optionnelle pour coller la transcription ou le descriptif -->
           <details class="text-[11px] text-zinc-400">
             <summary class="cursor-pointer hover:text-zinc-200 select-none font-medium">+ Coller la transcription ou le résumé de la vidéo (recommandé)</summary>
-            <textarea id="input-youtube-transcript" rows="3" placeholder="Sur YouTube : clique sur '...plus' dans la description > 'Afficher la transcription', copie le texte et colle-le ici pour une analyse exacte du contenu..." class="mt-2 w-full bg-[#0d0e12] border border-zinc-800 rounded-lg p-2.5 text-white text-xs focus:outline-none focus:border-red-500"></textarea>
+            <textarea id="input-youtube-transcript" rows="3" placeholder="Sur YouTube : clique sur '...plus' dans la description > 'Afficher la transcription', copie le texte et colle-le ici..." class="mt-2 w-full bg-[#0d0e12] border border-zinc-800 rounded-lg p-2.5 text-white text-xs focus:outline-none focus:border-red-500"></textarea>
           </details>
         </div>
 
-        <!-- Champ Sujet/Concept pour IA -->
+        <!-- Bloc IA -->
         <div id="ai-concept-box" class="hidden p-3 rounded-xl bg-purple-950/20 border border-brand-500/30 space-y-2">
           <label class="font-semibold text-brand-300 flex items-center gap-1.5">
             <i class="fa-solid fa-robot"></i>
@@ -668,9 +547,7 @@
                 <span>Créer</span>
               </button>
             </div>
-            <select id="select-category" onchange="updateSubcategoriesSelect()" class="tap-target w-full bg-[#0d0e12] border border-zinc-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-brand-500">
-              <!-- Dynamique -->
-            </select>
+            <select id="select-category" onchange="updateSubcategoriesSelect()" class="tap-target w-full bg-[#0d0e12] border border-zinc-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-brand-500"></select>
           </div>
           <div class="space-y-1">
             <div class="flex items-center justify-between">
@@ -680,13 +557,11 @@
                 <span>Créer</span>
               </button>
             </div>
-            <select id="select-subcategory" class="tap-target w-full bg-[#0d0e12] border border-zinc-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-brand-500">
-              <!-- Dynamique -->
-            </select>
+            <select id="select-subcategory" class="tap-target w-full bg-[#0d0e12] border border-zinc-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-brand-500"></select>
           </div>
         </div>
 
-        <!-- Zone de notes complètes avec bouton magique -->
+        <!-- Notes complètes -->
         <div class="space-y-1.5">
           <div class="flex items-center justify-between">
             <label class="font-semibold text-zinc-300">Notes détaillées & Synthèse</label>
@@ -698,28 +573,22 @@
           <textarea id="input-fullnotes" rows="6" placeholder="Colle ou saisis tes notes brutes ici..." class="w-full bg-[#0d0e12] border border-zinc-800 rounded-xl p-3 text-white text-xs focus:outline-none focus:border-brand-500 font-mono leading-relaxed"></textarea>
         </div>
 
-        <!-- Punchline à mémoriser -->
+        <!-- Punchline -->
         <div class="space-y-1">
-          <label class="font-semibold text-zinc-300 flex items-center justify-between">
-            <span>Punchline à retenir (1 à 2 phrases clés) *</span>
-          </label>
+          <label class="font-semibold text-zinc-300">Punchline à retenir (1 à 2 phrases clés) *</label>
           <input type="text" id="input-punchline" placeholder="L'idée maîtresse résumée..." class="tap-target w-full bg-[#0d0e12] border border-zinc-800 rounded-xl px-3 py-2 text-amber-300 text-xs focus:outline-none focus:border-brand-500 font-medium">
         </div>
 
-        <!-- Questions variées pour la révision -->
+        <!-- Questions -->
         <div class="space-y-2">
           <div class="flex items-center justify-between">
             <label class="font-semibold text-zinc-300">Questions de Révision (Angles variés)</label>
             <button type="button" onclick="addQuestionField()" class="text-brand-400 hover:underline text-[10px]">+ Ajouter un angle</button>
           </div>
-          <div id="questions-inputs-container" class="space-y-2">
-            <!-- Dynamique -->
-          </div>
+          <div id="questions-inputs-container" class="space-y-2"></div>
         </div>
-
       </div>
 
-      <!-- Actions de pied -->
       <div class="p-3 border-t border-zinc-800 bg-[#121318] flex items-center justify-between shrink-0">
         <button type="button" id="btn-delete-current-note" onclick="triggerDeleteFromModal()" class="hidden px-3 py-2 rounded-xl text-rose-400 hover:bg-rose-950/30 text-xs font-semibold flex items-center gap-1.5 transition">
           <i class="fa-solid fa-trash-can"></i>
@@ -730,13 +599,10 @@
           <button type="button" onclick="saveNote()" class="px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs shadow-lg shadow-brand-600/30 active:scale-95 transition">Enregistrer la Fiche</button>
         </div>
       </div>
-
     </div>
   </div>
 
-  <!-- ======================================================== -->
-  <!-- MODAL DE CONFIRMATION DE SUPPRESSION (SANS ALERT/CONFIRM) -->
-  <!-- ======================================================== -->
+  <!-- MODAL DE CONFIRMATION DE SUPPRESSION -->
   <div id="delete-confirm-modal" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-[60] hidden flex items-center justify-center p-4">
     <div class="bg-[#15161c] border border-zinc-800 rounded-2xl w-full max-w-sm p-5 space-y-4 shadow-2xl">
       <div class="flex items-center space-x-3 text-rose-400">
@@ -748,9 +614,7 @@
           <p id="delete-confirm-subtitle" class="text-xs text-zinc-400">Cette action est irréversible.</p>
         </div>
       </div>
-      <p id="delete-confirm-text" class="text-xs text-zinc-300 leading-relaxed">
-        Êtes-vous sûr de vouloir supprimer cet élément ?
-      </p>
+      <p id="delete-confirm-text" class="text-xs text-zinc-300 leading-relaxed">Êtes-vous sûr de vouloir supprimer cet élément ?</p>
       <div class="flex items-center justify-end space-x-2 pt-2">
         <button type="button" onclick="closeDeleteConfirmModal()" class="px-3.5 py-2 rounded-xl text-xs font-medium text-zinc-400 hover:text-white border border-zinc-800 bg-zinc-900">Annuler</button>
         <button type="button" id="delete-confirm-btn" class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 shadow-lg shadow-rose-600/30">Supprimer</button>
@@ -758,16 +622,13 @@
     </div>
   </div>
 
-  <!-- ======================================================== -->
   <!-- MODAL DE SYNCHRONISATION & SAUVEGARDE -->
-  <!-- ======================================================== -->
   <div id="sync-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
     <div class="bg-[#15161c] border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-2xl w-full max-w-md max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
-      
       <div class="px-5 py-4 border-b border-zinc-800 flex items-center justify-between shrink-0">
         <h3 class="font-bold text-white text-sm flex items-center gap-2">
           <i class="fa-solid fa-cloud text-brand-400"></i>
-          <span>Synchronisation & Sauvegardes</span>
+          <span>Synchronisation & Paramètres IA</span>
         </h3>
         <button onclick="closeSyncModal()" class="text-zinc-400 hover:text-white p-1">
           <i class="fa-solid fa-xmark text-base"></i>
@@ -775,47 +636,39 @@
       </div>
 
       <div class="p-5 space-y-5 overflow-y-auto no-scrollbar flex-1 text-xs">
-        
-        <!-- Identifiant Cloud -->
         <div class="space-y-2 bg-[#0d0e12] p-3.5 rounded-xl border border-zinc-800">
           <label class="font-semibold text-zinc-300 uppercase tracking-wider text-[10px]">Identifiant de Synchronisation Cloud</label>
           <div class="flex items-center space-x-2">
-            <input type="text" id="sync-user-id-field" readonly value="Synchronisation en cours..." class="w-full bg-[#15161c] border border-zinc-800 rounded-lg px-3 py-2 text-zinc-400 font-mono text-[11px] select-all">
+            <input type="text" id="sync-user-id-field" readonly value="Mode local actif" class="w-full bg-[#15161c] border border-zinc-800 rounded-lg px-3 py-2 text-zinc-400 font-mono text-[11px] select-all">
             <button onclick="copySyncId()" class="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg font-bold shrink-0 transition" title="Copier l'identifiant">
               <i class="fa-regular fa-copy"></i>
             </button>
           </div>
-          <p class="text-[11px] text-zinc-500">Toutes vos notes s'enregistrent automatiquement dans le cloud pour cet identifiant.</p>
+          <p class="text-[11px] text-zinc-500">Tes notes sont enregistrées sur cet appareil et synchronisées dès que le Cloud est actif.</p>
         </div>
 
-        <!-- Configuration Clé API Gemini (Pour que l'IA fonctionne sur GitHub) -->
         <div class="space-y-2 bg-[#0d0e12] p-3.5 rounded-xl border border-zinc-800">
           <div class="flex items-center justify-between">
             <label class="font-semibold text-brand-300 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
               <i class="fa-solid fa-key"></i>
               <span>Clé API Google Gemini (IA)</span>
             </label>
-            <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-[10px] text-brand-400 hover:underline">Obtenir une clé gratuite ↗</a>
+            <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-[10px] text-brand-400 hover:underline">Obtenir une clé AI Studio ↗</a>
           </div>
           <div class="flex items-center space-x-2">
             <input type="password" id="gemini-api-key-input" placeholder="Coller votre clé (AIzaSy... ou AQ...)" class="w-full bg-[#15161c] border border-zinc-800 rounded-lg px-3 py-2 text-white font-mono text-[11px] focus:outline-none focus:border-brand-500">
-            <button onclick="saveGeminiApiKey()" class="px-3 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-lg font-bold shrink-0 transition text-[11px]">
-              Sauver
-            </button>
+            <button onclick="saveGeminiApiKey()" class="px-3 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-lg font-bold shrink-0 transition text-[11px]">Sauver</button>
           </div>
-          <p class="text-[11px] text-zinc-500">Compatible avec les clés Google AI Studio (AIzaSy...) et Google Cloud (AQ...).</p>
+          <p class="text-[11px] text-zinc-500">Recommandé : une clé gratuite Google AI Studio (commençant par <span class="text-zinc-300 font-mono">AIzaSy...</span>) fonctionne instantanément sur GitHub.</p>
         </div>
 
-        <!-- Export / Import Local -->
         <div class="space-y-3">
           <label class="font-semibold text-zinc-400 uppercase tracking-wider text-[10px]">Sauvegardes manuelles (Fichier JSON)</label>
-          
           <div class="grid grid-cols-2 gap-2">
             <button onclick="exportDataToFile()" class="tap-target p-3 bg-zinc-900 border border-zinc-800 rounded-xl hover:border-zinc-700 flex flex-col items-center justify-center space-y-1 transition text-zinc-200">
               <i class="fa-solid fa-download text-brand-400 text-sm"></i>
               <span class="font-semibold text-[11px]">Exporter (.json)</span>
             </button>
-            
             <label class="tap-target p-3 bg-zinc-900 border border-zinc-800 rounded-xl hover:border-zinc-700 flex flex-col items-center justify-center space-y-1 transition text-zinc-200 cursor-pointer">
               <i class="fa-solid fa-upload text-indigo-400 text-sm"></i>
               <span class="font-semibold text-[11px]">Importer (.json)</span>
@@ -823,24 +676,22 @@
             </label>
           </div>
         </div>
-
       </div>
 
       <div class="p-3 border-t border-zinc-800 bg-[#121318] flex justify-end shrink-0">
         <button onclick="closeSyncModal()" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white font-semibold rounded-xl text-xs">Fermer</button>
       </div>
-
     </div>
   </div>
 
-  <!-- Notification Toast Compacte -->
+  <!-- Notification Toast -->
   <div id="toast-msg" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 bg-zinc-900/95 border border-zinc-700 text-white px-4 py-2.5 rounded-full shadow-2xl flex items-center space-x-2 text-xs font-semibold transition-all duration-300 transform -translate-y-16 opacity-0 pointer-events-none backdrop-blur-md">
     <span id="toast-icon" class="text-brand-400"></span>
     <span id="toast-text">Notification</span>
   </div>
 
   <!-- ========================================== -->
-  <!-- JAVASCRIPT & LOGIQUE ÉPURÉE -->
+  <!-- JAVASCRIPT COMPLET & AUTONOME              -->
   <!-- ========================================== -->
   <script>
     let currentTab = 'dashboard';
@@ -852,8 +703,9 @@
     let editingNoteId = null;
     let isMobileSimulator = false;
     let activeFilterType = 'all';
-    let activeFilterTaxonomy = 'all'; // Peut être une catégorie ou une sous-catégorie
-    // Persistance locale avec sauvegarde par défaut
+    let activeFilterTaxonomy = 'all';
+    let pendingDeleteAction = null;
+
     const DEFAULT_TAXONOMY = {
       "Histoire": ["2nde Guerre mondiale", "Antiquité Romaine", "Guerre Froide"],
       "Lectures": ["Philosophie Stoïcienne", "Psychologie & Habitudes", "Économie"],
@@ -885,16 +737,60 @@
         ],
         quizCorrectIndex: 0,
         dueInDays: 0
+      },
+      {
+        id: "note-2",
+        type: "book",
+        title: "Atomic Habits",
+        reference: "James Clear — Chap. 1",
+        category: "Lectures",
+        subcategory: "Psychologie & Habitudes",
+        fullNotes: "🎯 EN BREF :\nUne amélioration de 1 % par jour produit un effet cumulé massif de x37 sur un an.\n\n⚙️ POINTS CLÉS :\n• Les objectifs définissent la direction, mais les systèmes quotidiens produisent les résultats.\n• Rendez la bonne habitude évidente, attractive, facile et satisfaisante.\n\n💡 EXEMPLE CONCRET DU QUOTIDIEN :\nPréparer ses baskets la veille devant la porte réduit la friction du matin à zéro.",
+        punchline: "Tu ne t'élèves pas au niveau de tes objectifs, tu retombes au niveau de tes systèmes.",
+        question: "Selon James Clear, pourquoi faut-il privilégier les systèmes plutôt que les objectifs ?",
+        questions: [
+          "Selon James Clear, pourquoi faut-il privilégier les systèmes plutôt que les objectifs ?",
+          "Quel est l'effet mathématique d'une amélioration de 1 % chaque jour pendant un an ?"
+        ],
+        quizOptions: [
+          "Parce que les systèmes façonnent les habitudes durables au quotidien",
+          "Parce que se fixer des objectifs est inutile",
+          "Parce que la volonté suffit toujours"
+        ],
+        quizCorrectIndex: 0,
+        dueInDays: 0
+      },
+      {
+        id: "note-3",
+        type: "book",
+        title: "Pensées pour moi-même",
+        reference: "Marc Aurèle — Livre IV",
+        category: "Lectures",
+        subcategory: "Philosophie Stoïcienne",
+        fullNotes: "🎯 EN BREF :\nCe ne sont pas les événements extérieurs qui nous troublent, mais le jugement que nous portons sur eux.\n\n⚙️ POINTS CLÉS :\n• Distinguer ce qui dépend de nous (nos pensées, nos actes) de ce qui n'en dépend pas.\n• Transformer l'obstacle en matière première d'action.",
+        punchline: "L'obstacle sur le chemin devient le chemin.",
+        question: "Quelle est la règle d'or stoïcienne face à un imprévu ou un échec ?",
+        questions: [
+          "Quelle est la règle d'or stoïcienne face à un imprévu ou un échec ?"
+        ],
+        quizOptions: [
+          "Distinguer ce qui dépend de soi et transformer l'obstacle en opportunité d'action",
+          "Attendre que les circonstances deviennent idéales",
+          "Ignorer ses émotions sans réfléchir"
+        ],
+        quizCorrectIndex: 0,
+        dueInDays: 0
       }
     ];
 
+    // Chargement persistant strict (respecte toutes les suppressions même jusqu'à 0)
     const isInitialized = localStorage.getItem('synapse_initialized') === 'true';
     let taxonomy = isInitialized && localStorage.getItem('synapse_taxonomy')
       ? JSON.parse(localStorage.getItem('synapse_taxonomy'))
-      : DEFAULT_TAXONOMY;
+      : JSON.parse(JSON.stringify(DEFAULT_TAXONOMY));
     let notes = isInitialized && localStorage.getItem('synapse_notes')
       ? JSON.parse(localStorage.getItem('synapse_notes'))
-      : DEFAULT_NOTES;
+      : JSON.parse(JSON.stringify(DEFAULT_NOTES));
 
     if (!isInitialized) {
       localStorage.setItem('synapse_initialized', 'true');
@@ -911,15 +807,787 @@
         console.warn("Stockage local indisponible", e);
       }
 
-      // Synchronisation Cloud automatique en arrière-plan
-      ? (JSON.parse(localStorage.getItem('synapse_taxonomy')) || {})
-      : DEFAULT_TAXONOMY;
-    let notes = localStorage.getItem('synapse_initialized')
-      ? (JSON.parse(localStorage.getItem('synapse_notes')) || [])
-      : DEFAULT_NOTES;
+      if (window.isCloudReady && typeof window.cloudSave === 'function') {
+        window.cloudSave(notes, taxonomy);
+      }
+      updateDueBadges();
+    }
 
-    if (!localStorage.getItem('synapse_initialized')) {
-    // GÉNÉRATION COMPLÈTE DE FICHE VIA UN MOT-CLÉ / CONCEPT
+    // Écoute synchronisation Cloud Firebase si disponible
+    document.addEventListener('cloud-ready', (e) => {
+      const dot = document.getElementById('cloud-status-dot');
+      const label = document.getElementById('cloud-status-label');
+      const idField = document.getElementById('sync-user-id-field');
+      if (dot) dot.className = "w-1.5 h-1.5 rounded-full bg-emerald-400";
+      if (label) label.innerText = "Cloud";
+      if (idField && e.detail?.uid) idField.value = e.detail.uid;
+
+      if (typeof window.cloudListen === 'function') {
+        window.cloudListen((cloudData) => {
+          if (cloudData && Array.isArray(cloudData.notes) && cloudData.taxonomy) {
+            notes = cloudData.notes;
+            taxonomy = cloudData.taxonomy;
+            localStorage.setItem('synapse_initialized', 'true');
+            localStorage.setItem('synapse_notes', JSON.stringify(notes));
+            localStorage.setItem('synapse_taxonomy', JSON.stringify(taxonomy));
+            initCategoriesUI();
+            renderDashboard();
+            renderNotesList();
+          }
+        });
+      }
+    });
+
+    // ==========================================
+    // GESTION CLÉ API GEMINI & APPELS IA
+    // ==========================================
+    function getGeminiApiKey() {
+      const saved = (localStorage.getItem('synapse_gemini_api_key') || '').trim();
+      if (saved) return saved;
+      if (typeof __gemini_api_key !== 'undefined' && __gemini_api_key) return __gemini_api_key;
+      return '';
+    }
+
+    function saveGeminiApiKey() {
+      const input = document.getElementById('gemini-api-key-input');
+      const val = input ? input.value.trim() : '';
+      localStorage.setItem('synapse_gemini_api_key', val);
+      showToast(val ? "Clé API Gemini enregistrée ! 🔑" : "Clé API effacée.");
+    }
+
+    async function callGeminiJSON(promptText, responseSchema) {
+      const apiKey = getGeminiApiKey();
+      if (!apiKey) {
+        throw new Error("NO_API_KEY");
+      }
+
+      const models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
+      let lastError = "Erreur de connexion API";
+
+      for (const model of models) {
+        try {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+          const res = await fetch(url, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-goog-api-key": apiKey
+            },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: promptText }] }],
+              generationConfig: {
+                responseMimeType: "application/json",
+                responseSchema: responseSchema
+              }
+            })
+          });
+
+          const data = await res.json();
+          if (!res.ok) {
+            lastError = data?.error?.message || `HTTP ${res.status}`;
+            continue;
+          }
+
+          const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (rawText) {
+            return JSON.parse(rawText);
+          }
+        } catch (err) {
+          lastError = err.message || lastError;
+        }
+      }
+
+      throw new Error(lastError);
+    }
+
+    // ==========================================
+    // NAVIGATION ENTRE LES ONGLETS
+    // ==========================================
+    function switchTab(tab) {
+      currentTab = tab;
+      ['dashboard', 'review', 'notes'].forEach(t => {
+        const viewEl = document.getElementById(`view-${t}`);
+        const navDesktop = document.getElementById(`nav-${t}`);
+        const navMobile = document.getElementById(`mobile-nav-${t}`);
+
+        if (viewEl) viewEl.classList.toggle('hidden', t !== tab);
+        if (navDesktop) {
+          if (t === tab) {
+            navDesktop.className = "w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all text-white bg-zinc-800/80";
+          } else {
+            navDesktop.className = "w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all text-zinc-400 hover:text-white hover:bg-zinc-800/40";
+          }
+        }
+        if (navMobile) {
+          navMobile.classList.toggle('text-brand-400', t === tab);
+          navMobile.classList.toggle('text-zinc-400', t !== tab);
+        }
+      });
+
+      const headerTitle = document.getElementById('header-title');
+      const headerSub = document.getElementById('header-subtitle');
+      if (tab === 'dashboard') {
+        headerTitle.innerText = "Bonjour";
+        headerSub.innerText = "Prends 5 minutes pour ancrer tes lectures";
+        renderDashboard();
+      } else if (tab === 'review') {
+        headerTitle.innerText = "Session Express";
+        headerSub.innerText = "Ancrage mémoriel actif";
+        if (reviewQueue.length === 0) startExpressSession(5);
+      } else if (tab === 'notes') {
+        headerTitle.innerText = "Bibliothèque";
+        headerSub.innerText = "Toutes tes fiches et punchlines";
+        renderNotesList();
+      }
+    }
+
+    // ==========================================
+    // RENDU DU TABLEAU DE BORD (AUJOURD'HUI)
+    // ==========================================
+    function renderDashboard() {
+      updateDueBadges();
+      const totalStat = document.getElementById('stat-total-notes');
+      if (totalStat) totalStat.innerText = `${notes.length} fiche${notes.length > 1 ? 's' : ''}`;
+
+      // Pilules Catégories
+      const pillsRow = document.getElementById('category-pills-row');
+      if (pillsRow) {
+        const cats = Object.keys(taxonomy);
+        pillsRow.innerHTML = cats.map(cat => {
+          const count = notes.filter(n => n.category === cat).length;
+          return `
+            <button onclick="openCategoryInLibrary('${escapeHtml(cat)}')" class="px-3.5 py-2 rounded-xl bg-[#15161c] hover:bg-zinc-800 border border-zinc-800 text-xs font-medium text-zinc-200 whitespace-nowrap flex items-center space-x-2 transition shrink-0">
+              <span>${escapeHtml(cat)}</span>
+              <span class="text-[10px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded-md font-bold">${count}</span>
+            </button>
+          `;
+        }).join('');
+      }
+
+      // Dernières captures
+      const recentContainer = document.getElementById('dashboard-recent-notes');
+      if (recentContainer) {
+        if (notes.length === 0) {
+          recentContainer.innerHTML = `
+            <div class="p-6 text-center bg-[#13141a] border border-zinc-800/60 rounded-2xl text-xs text-zinc-400 space-y-2">
+              <p>Aucune fiche enregistrée pour le moment.</p>
+              <button onclick="openNoteModal()" class="text-brand-400 font-semibold hover:underline">+ Créer ta première fiche</button>
+            </div>
+          `;
+        } else {
+          recentContainer.innerHTML = notes.slice(0, 5).map(note => `
+            <div onclick="editNote('${note.id}')" class="cursor-pointer bg-[#15161c] hover:bg-[#191b23] border border-zinc-800/80 rounded-2xl p-4 transition flex items-start justify-between gap-3">
+              <div class="space-y-1.5 min-w-0 flex-1">
+                <div class="flex items-center space-x-2 text-[11px] text-zinc-400">
+                  <span>${getSourceIcon(note.type)}</span>
+                  <span class="font-semibold text-zinc-300 truncate">${escapeHtml(note.title)}</span>
+                  <span>•</span>
+                  <span class="text-brand-400 shrink-0">${escapeHtml(note.category || '')}</span>
+                </div>
+                <p class="text-xs text-zinc-200 font-medium line-clamp-2">« ${escapeHtml(note.punchline)} »</p>
+              </div>
+              <button onclick="event.stopPropagation(); confirmDeleteNote('${note.id}')" class="text-zinc-500 hover:text-rose-400 p-1.5 shrink-0" title="Supprimer cette fiche">
+                <i class="fa-solid fa-trash-can text-xs"></i>
+              </button>
+            </div>
+          `).join('');
+        }
+      }
+
+      rerollDailyPunchline();
+    }
+
+    function rerollDailyPunchline() {
+      const textEl = document.getElementById('daily-punchline-text');
+      const srcEl = document.getElementById('daily-punchline-source');
+      const catEl = document.getElementById('daily-punchline-category');
+      if (!textEl || notes.length === 0) return;
+
+      const randomNote = notes[Math.floor(Math.random() * notes.length)];
+      textEl.innerText = `« ${randomNote.punchline} »`;
+      if (srcEl) srcEl.innerText = `${randomNote.title}${randomNote.reference ? ' — ' + randomNote.reference : ''}`;
+      if (catEl) catEl.innerText = randomNote.category || 'Général';
+    }
+
+    function openCategoryInLibrary(cat) {
+      activeFilterTaxonomy = cat;
+      switchTab('notes');
+    }
+
+    // ==========================================
+    // SESSION DE RÉVISION (FLASHCARDS & QUIZZ)
+    // ==========================================
+    function startExpressSession(maxCards = 5) {
+      if (notes.length === 0) {
+        showToast("Ajoute d'abord une fiche pour lancer une session !");
+        return;
+      }
+      const shuffled = [...notes].sort(() => Math.random() - 0.5);
+      reviewQueue = shuffled.slice(0, Math.min(maxCards, shuffled.length));
+      currentReviewIndex = 0;
+      switchTab('review');
+      renderCurrentReviewCard();
+    }
+
+    function startRandomEcho() {
+      if (notes.length === 0) {
+        showToast("Aucune fiche disponible.");
+        return;
+      }
+      const randomNote = notes[Math.floor(Math.random() * notes.length)];
+      reviewQueue = [randomNote];
+      currentReviewIndex = 0;
+      switchTab('review');
+      renderCurrentReviewCard();
+      showToast("Écho aléatoire tiré ! 🎲");
+    }
+
+    function setReviewMode(mode) {
+      reviewMode = mode;
+      const btnCard = document.getElementById('btn-mode-flashcard');
+      const btnQuiz = document.getElementById('btn-mode-quiz');
+      const cardBox = document.getElementById('review-flashcard-box');
+      const quizBox = document.getElementById('review-quiz-box');
+      const cardActions = document.getElementById('flashcard-actions');
+      const quizActions = document.getElementById('quiz-actions');
+
+      if (mode === 'flashcard') {
+        btnCard.className = "px-2.5 py-1 rounded-md text-[11px] font-semibold bg-brand-600 text-white";
+        btnQuiz.className = "px-2.5 py-1 rounded-md text-[11px] font-semibold text-zinc-400";
+        cardBox.classList.remove('hidden');
+        cardActions.classList.remove('hidden');
+        quizBox.classList.add('hidden');
+        quizActions.classList.add('hidden');
+      } else {
+        btnQuiz.className = "px-2.5 py-1 rounded-md text-[11px] font-semibold bg-brand-600 text-white";
+        btnCard.className = "px-2.5 py-1 rounded-md text-[11px] font-semibold text-zinc-400";
+        cardBox.classList.add('hidden');
+        cardActions.classList.add('hidden');
+        quizBox.classList.remove('hidden');
+        quizActions.classList.remove('hidden');
+      }
+      renderCurrentReviewCard();
+    }
+
+    function renderCurrentReviewCard() {
+      if (reviewQueue.length === 0) return;
+      const note = reviewQueue[currentReviewIndex];
+      const total = reviewQueue.length;
+
+      document.getElementById('review-progress-text').innerText = `${currentReviewIndex + 1} / ${total}`;
+      document.getElementById('review-progress-bar').style.width = `${((currentReviewIndex + 1) / total) * 100}%`;
+
+      currentCardFlipped = false;
+      document.getElementById('flashcard-inner').classList.remove('rotate-y-180');
+
+      const questionsPool = (note.questions && note.questions.length > 0) ? note.questions : [note.question || `Point clé de : ${note.title}`];
+      const selectedQuestion = questionsPool[Math.floor(Math.random() * questionsPool.length)];
+
+      // Flashcard
+      document.getElementById('card-hierarchy').innerText = `${note.category || ''}${note.subcategory ? ' • ' + note.subcategory : ''}`;
+      document.getElementById('card-source-tag').innerText = note.title;
+      document.getElementById('card-question-text').innerText = selectedQuestion;
+      document.getElementById('card-answer-punchline').innerText = `« ${note.punchline} »`;
+      document.getElementById('card-fullnote-preview').innerText = note.fullNotes || "Aucune note complémentaire.";
+
+      // Quizz
+      document.getElementById('quiz-source-tag').innerText = note.title;
+      document.getElementById('quiz-question-text').innerText = selectedQuestion;
+      document.getElementById('quiz-explanation-box').classList.add('hidden');
+      document.getElementById('quiz-next-btn').disabled = true;
+
+      const distractors = notes.filter(n => n.id !== note.id).map(n => n.punchline).slice(0, 2);
+      while (distractors.length < 2) {
+        distractors.push(distractors.length === 0 ? "Une approche purement théorique sans application concrète." : "Un détail secondaire sans impact sur le système global.");
+      }
+
+      const options = [
+        { text: note.punchline, isCorrect: true },
+        { text: distractors[0], isCorrect: false },
+        { text: distractors[1], isCorrect: false }
+      ].sort(() => Math.random() - 0.5);
+
+      const optsContainer = document.getElementById('quiz-options-container');
+      optsContainer.innerHTML = options.map((opt, idx) => `
+        <button onclick="selectQuizOption(this, ${opt.isCorrect})" class="quiz-opt-btn w-full text-left p-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs text-zinc-200 transition leading-relaxed">
+          <span class="font-bold text-brand-400 mr-2">${String.fromCharCode(65 + idx)}.</span>
+          <span>${escapeHtml(opt.text)}</span>
+        </button>
+      `).join('');
+    }
+
+    function flipFlashcard() {
+      currentCardFlipped = !currentCardFlipped;
+      const inner = document.getElementById('flashcard-inner');
+      inner.classList.toggle('rotate-y-180', currentCardFlipped);
+    }
+
+    function copyCardPunchline(event) {
+      event.stopPropagation();
+      const note = reviewQueue[currentReviewIndex];
+      if (!note) return;
+      const temp = document.createElement('textarea');
+      temp.value = note.punchline;
+      document.body.appendChild(temp);
+      temp.select();
+      document.execCommand('copy');
+      document.body.removeChild(temp);
+      showToast("Punchline copiée ! 📋");
+    }
+
+    function handleCardAnswer(rating) {
+      if (rating === 'hard') {
+        reviewQueue.push(reviewQueue[currentReviewIndex]);
+        showToast("Carte replacée en fin de session 🔁");
+      }
+      nextCard();
+    }
+
+    function selectQuizOption(btn, isCorrect) {
+      const allBtns = document.querySelectorAll('.quiz-opt-btn');
+      allBtns.forEach(b => b.disabled = true);
+
+      if (isCorrect) {
+        btn.className = "quiz-opt-btn w-full text-left p-3.5 rounded-xl bg-emerald-950/50 border border-emerald-500 text-xs text-emerald-200 font-semibold";
+      } else {
+        btn.className = "quiz-opt-btn w-full text-left p-3.5 rounded-xl bg-rose-950/50 border border-rose-500 text-xs text-rose-200";
+      }
+
+      const note = reviewQueue[currentReviewIndex];
+      document.getElementById('quiz-explanation-text').innerText = note.punchline;
+      document.getElementById('quiz-explanation-box').classList.remove('hidden');
+      document.getElementById('quiz-next-btn').disabled = false;
+    }
+
+    function nextCard() {
+      if (currentReviewIndex + 1 < reviewQueue.length) {
+        currentReviewIndex++;
+        renderCurrentReviewCard();
+      } else {
+        showToast("Bravo ! Session terminée 🎉");
+        reviewQueue = [];
+        switchTab('dashboard');
+      }
+    }
+
+    // ==========================================
+    // BIBLIOTHÈQUE & FILTRES
+    // ==========================================
+    function filterByType(type) {
+      activeFilterType = type;
+      ['all', 'book', 'youtube', 'ai', 'other'].forEach(t => {
+        const btn = document.getElementById(`filter-type-${t}`);
+        if (!btn) return;
+        if (t === type) {
+          btn.className = "filter-chip px-3 py-1.5 rounded-lg text-xs font-medium bg-brand-600 text-white whitespace-nowrap";
+        } else {
+          btn.className = "filter-chip px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-white whitespace-nowrap";
+        }
+      });
+      renderNotesList();
+    }
+
+    function filterByTaxonomy(val) {
+      activeFilterTaxonomy = val;
+      renderTaxonomyFilterPills();
+      renderNotesList();
+    }
+
+    function renderTaxonomyFilterPills() {
+      const container = document.getElementById('taxonomy-filter-pills');
+      if (!container) return;
+
+      let html = `<button onclick="filterByTaxonomy('all')" class="px-2.5 py-1 rounded-lg text-[11px] font-medium whitespace-nowrap ${activeFilterTaxonomy === 'all' ? 'bg-zinc-200 text-zinc-900 font-bold' : 'bg-zinc-900 text-zinc-400 border border-zinc-800'}">Toutes</button>`;
+
+      Object.keys(taxonomy).forEach(cat => {
+        const isCatActive = activeFilterTaxonomy === cat;
+        html += `<button onclick="filterByTaxonomy('${escapeHtml(cat)}')" class="px-2.5 py-1 rounded-lg text-[11px] font-medium whitespace-nowrap ${isCatActive ? 'bg-brand-600 text-white font-bold' : 'bg-zinc-900 text-zinc-300 border border-zinc-800'}">${escapeHtml(cat)}</button>`;
+        (taxonomy[cat] || []).forEach(sub => {
+          const isSubActive = activeFilterTaxonomy === sub;
+          html += `<button onclick="filterByTaxonomy('${escapeHtml(sub)}')" class="px-2 py-1 rounded-lg text-[10px] whitespace-nowrap ${isSubActive ? 'bg-indigo-600 text-white font-bold' : 'bg-zinc-950 text-zinc-400 border border-zinc-800/70'}"># ${escapeHtml(sub)}</button>`;
+        });
+      });
+
+      container.innerHTML = html;
+    }
+
+    function renderNotesList() {
+      const container = document.getElementById('notes-cards-container');
+      if (!container) return;
+
+      const query = (document.getElementById('notes-search-input')?.value || '').toLowerCase().trim();
+
+      const filtered = notes.filter(note => {
+        const matchesType = activeFilterType === 'all' || note.type === activeFilterType;
+        const matchesTax = activeFilterTaxonomy === 'all' || note.category === activeFilterTaxonomy || note.subcategory === activeFilterTaxonomy;
+        const matchesQuery = !query ||
+          (note.title || '').toLowerCase().includes(query) ||
+          (note.punchline || '').toLowerCase().includes(query) ||
+          (note.fullNotes || '').toLowerCase().includes(query) ||
+          (note.reference || '').toLowerCase().includes(query);
+        return matchesType && matchesTax && matchesQuery;
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="p-8 text-center bg-[#15161c] border border-zinc-800 rounded-2xl text-xs text-zinc-400 space-y-2">
+            <p>Aucune fiche ne correspond à ces critères.</p>
+            <button onclick="openNoteModal()" class="text-brand-400 font-semibold hover:underline">+ Ajouter une fiche</button>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filtered.map(note => `
+        <div class="bg-[#15161c] border border-zinc-800/90 rounded-2xl p-4 sm:p-5 space-y-3 transition hover:border-zinc-700">
+          <div class="flex items-start justify-between gap-2">
+            <div class="space-y-1 min-w-0">
+              <div class="flex items-center flex-wrap gap-1.5 text-[11px] text-zinc-400">
+                <span>${getSourceIcon(note.type)}</span>
+                <span class="font-bold text-white text-xs sm:text-sm">${escapeHtml(note.title)}</span>
+                ${note.reference ? `<span class="text-zinc-500">• ${escapeHtml(note.reference)}</span>` : ''}
+              </div>
+              <div class="flex items-center gap-1.5 text-[10px]">
+                <span class="bg-brand-500/10 text-brand-300 border border-brand-500/20 px-2 py-0.5 rounded-md font-medium">${escapeHtml(note.category || 'Général')}</span>
+                ${note.subcategory ? `<span class="bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded-md">${escapeHtml(note.subcategory)}</span>` : ''}
+              </div>
+            </div>
+
+            <div class="flex items-center space-x-1 shrink-0">
+              <button onclick="editNote('${note.id}')" class="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition" title="Modifier la fiche">
+                <i class="fa-solid fa-pen text-xs"></i>
+              </button>
+              <button onclick="confirmDeleteNote('${note.id}')" class="p-2 text-zinc-400 hover:text-rose-400 hover:bg-rose-950/30 rounded-lg transition" title="Supprimer la fiche">
+                <i class="fa-solid fa-trash-can text-xs"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="p-3 rounded-xl bg-amber-400/5 border border-amber-400/20 text-xs text-amber-200 font-medium leading-relaxed">
+            « ${escapeHtml(note.punchline)} »
+          </div>
+
+          ${note.fullNotes ? `
+            <details class="text-xs text-zinc-400">
+              <summary class="cursor-pointer hover:text-zinc-200 select-none font-medium text-[11px]">Lire la synthèse complète</summary>
+              <div class="mt-2 p-3 rounded-xl bg-[#0d0e12] border border-zinc-800/80 text-zinc-300 whitespace-pre-line leading-relaxed">${escapeHtml(note.fullNotes)}</div>
+            </details>
+          ` : ''}
+        </div>
+      `).join('');
+    }
+
+    // ==========================================
+    // GESTION DES CATÉGORIES & SUPPRESSIONS
+    // ==========================================
+    function initCategoriesUI() {
+      const desktopList = document.getElementById('desktop-category-list');
+      if (desktopList) {
+        desktopList.innerHTML = Object.keys(taxonomy).map(cat => {
+          const count = notes.filter(n => n.category === cat).length;
+          return `
+            <button onclick="openCategoryInLibrary('${escapeHtml(cat)}')" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-zinc-800/60 hover:text-white transition text-left">
+              <span class="truncate">${escapeHtml(cat)}</span>
+              <span class="text-[11px] text-zinc-500">${count}</span>
+            </button>
+          `;
+        }).join('');
+      }
+
+      const selectCat = document.getElementById('select-category');
+      if (selectCat) {
+        const currentVal = selectCat.value;
+        selectCat.innerHTML = Object.keys(taxonomy).map(cat => `<option value="${escapeHtml(cat)}">${escapeHtml(cat)}</option>`).join('');
+        if (currentVal && taxonomy[currentVal]) selectCat.value = currentVal;
+        updateSubcategoriesSelect();
+      }
+
+      renderTaxonomyFilterPills();
+    }
+
+    function updateSubcategoriesSelect() {
+      const cat = document.getElementById('select-category')?.value;
+      const subSelect = document.getElementById('select-subcategory');
+      if (!subSelect) return;
+
+      const subs = (cat && taxonomy[cat]) ? taxonomy[cat] : [];
+      subSelect.innerHTML = `<option value="">— Aucun sous-thème —</option>` +
+        subs.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+    }
+
+    function openManageTaxonomyModal() {
+      renderTaxonomyModalTree();
+      document.getElementById('taxonomy-modal').classList.remove('hidden');
+    }
+
+    function closeManageTaxonomyModal() {
+      document.getElementById('taxonomy-modal').classList.add('hidden');
+      initCategoriesUI();
+      renderDashboard();
+      renderNotesList();
+    }
+
+    function renderTaxonomyModalTree() {
+      const parentSelect = document.getElementById('modal-parent-cat-select');
+      const treeContainer = document.getElementById('modal-taxonomy-tree');
+      const cats = Object.keys(taxonomy);
+
+      if (parentSelect) {
+        parentSelect.innerHTML = cats.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+      }
+
+      if (treeContainer) {
+        if (cats.length === 0) {
+          treeContainer.innerHTML = `<p class="text-zinc-500 italic">Aucune catégorie créée.</p>`;
+          return;
+        }
+        treeContainer.innerHTML = cats.map(cat => {
+          const subs = taxonomy[cat] || [];
+          return `
+            <div class="p-3 rounded-xl bg-[#0d0e12] border border-zinc-800 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-white text-xs">${escapeHtml(cat)}</span>
+                <button type="button" onclick="confirmDeleteCategory('${escapeHtml(cat)}')" class="text-zinc-400 hover:text-rose-400 p-1" title="Supprimer cette catégorie">
+                  <i class="fa-solid fa-trash-can text-xs"></i>
+                </button>
+              </div>
+              <div class="flex flex-wrap gap-1.5">
+                ${subs.length === 0 ? `<span class="text-[10px] text-zinc-500">Aucun sous-thème</span>` : subs.map(sub => `
+                  <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-300 text-[11px]">
+                    <span>${escapeHtml(sub)}</span>
+                    <button type="button" onclick="confirmDeleteSubcategory('${escapeHtml(cat)}', '${escapeHtml(sub)}')" class="text-zinc-400 hover:text-rose-400" title="Supprimer ce sous-thème">
+                      <i class="fa-solid fa-xmark text-[10px]"></i>
+                    </button>
+                  </span>
+                `).join('')}
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+
+    function handleAddCategoryFromModal() {
+      const input = document.getElementById('new-cat-input');
+      const name = input.value.trim();
+      if (!name) return;
+      if (taxonomy[name]) {
+        showToast("Cette catégorie existe déjà.");
+        return;
+      }
+      taxonomy[name] = [];
+      input.value = '';
+      saveStateToStorage();
+      renderTaxonomyModalTree();
+      initCategoriesUI();
+      showToast(`Catégorie « ${name} » ajoutée !`);
+    }
+
+    function handleAddSubcategoryFromModal() {
+      const cat = document.getElementById('modal-parent-cat-select').value;
+      const input = document.getElementById('new-sub-input');
+      const sub = input.value.trim();
+      if (!cat || !sub) return;
+      if (!taxonomy[cat]) taxonomy[cat] = [];
+      if (taxonomy[cat].includes(sub)) {
+        showToast("Ce sous-thème existe déjà.");
+        return;
+      }
+      taxonomy[cat].push(sub);
+      input.value = '';
+      saveStateToStorage();
+      renderTaxonomyModalTree();
+      initCategoriesUI();
+      showToast(`Sous-thème « ${sub} » ajouté !`);
+    }
+
+    // Confirmation personnalisée de suppression (sans alert/confirm natif)
+    function openDeleteConfirmModal(title, text, onConfirm) {
+      document.getElementById('delete-confirm-title').innerText = title;
+      document.getElementById('delete-confirm-text').innerText = text;
+      pendingDeleteAction = onConfirm;
+      document.getElementById('delete-confirm-modal').classList.remove('hidden');
+    }
+
+    function closeDeleteConfirmModal() {
+      document.getElementById('delete-confirm-modal').classList.add('hidden');
+      pendingDeleteAction = null;
+    }
+
+    document.getElementById('delete-confirm-btn').addEventListener('click', () => {
+      if (typeof pendingDeleteAction === 'function') {
+        pendingDeleteAction();
+      }
+      closeDeleteConfirmModal();
+    });
+
+    function confirmDeleteNote(id) {
+      const note = notes.find(n => n.id === id);
+      if (!note) return;
+      openDeleteConfirmModal(
+        "Supprimer cette fiche ?",
+        `La fiche « ${note.title} » sera définitivement supprimée.`,
+        () => {
+          notes = notes.filter(n => n.id !== id);
+          saveStateToStorage();
+          renderDashboard();
+          renderNotesList();
+          showToast("Fiche supprimée 🗑️");
+        }
+      );
+    }
+
+    function triggerDeleteFromModal() {
+      if (!editingNoteId) return;
+      const idToDelete = editingNoteId;
+      closeNoteModal();
+      confirmDeleteNote(idToDelete);
+    }
+
+    function confirmDeleteCategory(catName) {
+      openDeleteConfirmModal(
+        "Supprimer la catégorie ?",
+        `Supprimer « ${catName} » ? Les fiches associées seront conservées et déplacées vers « Non classé ».`,
+        () => {
+          delete taxonomy[catName];
+          if (Object.keys(taxonomy).length === 0) {
+            taxonomy["Général"] = [];
+          }
+          const fallbackCat = Object.keys(taxonomy)[0];
+          notes.forEach(n => {
+            if (n.category === catName) {
+              n.category = fallbackCat;
+              n.subcategory = "";
+            }
+          });
+          if (activeFilterTaxonomy === catName) activeFilterTaxonomy = 'all';
+          saveStateToStorage();
+          renderTaxonomyModalTree();
+          initCategoriesUI();
+          renderDashboard();
+          renderNotesList();
+          showToast(`Catégorie « ${catName} » supprimée`);
+        }
+      );
+    }
+
+    function confirmDeleteSubcategory(catName, subName) {
+      openDeleteConfirmModal(
+        "Supprimer le sous-thème ?",
+        `Retirer le sous-thème « ${subName} » de « ${catName} » ?`,
+        () => {
+          if (taxonomy[catName]) {
+            taxonomy[catName] = taxonomy[catName].filter(s => s !== subName);
+          }
+          notes.forEach(n => {
+            if (n.category === catName && n.subcategory === subName) {
+              n.subcategory = "";
+            }
+          });
+          if (activeFilterTaxonomy === subName) activeFilterTaxonomy = 'all';
+          saveStateToStorage();
+          renderTaxonomyModalTree();
+          initCategoriesUI();
+          renderNotesList();
+          showToast(`Sous-thème « ${subName} » supprimé`);
+        }
+      );
+    }
+
+    // ==========================================
+    // MODAL CRÉATION / ÉDITION DE FICHE
+    // ==========================================
+    function openNoteModal(noteId = null) {
+      editingNoteId = noteId;
+      initCategoriesUI();
+
+      const delBtn = document.getElementById('btn-delete-current-note');
+      if (noteId) {
+        const note = notes.find(n => n.id === noteId);
+        if (!note) return;
+        document.getElementById('modal-title').innerText = "Modifier la Fiche";
+        if (delBtn) delBtn.classList.remove('hidden');
+
+        selectSourceType(note.type || 'book');
+        document.getElementById('input-title').value = note.title || '';
+        document.getElementById('input-reference').value = note.reference || '';
+        if (note.category && taxonomy[note.category]) {
+          document.getElementById('select-category').value = note.category;
+          updateSubcategoriesSelect();
+        }
+        document.getElementById('select-subcategory').value = note.subcategory || '';
+        document.getElementById('input-fullnotes').value = note.fullNotes || '';
+        document.getElementById('input-punchline').value = note.punchline || '';
+        renderQuestionFields(note.questions || (note.question ? [note.question] : ['']));
+      } else {
+        document.getElementById('modal-title').innerText = "Nouvelle Fiche";
+        if (delBtn) delBtn.classList.add('hidden');
+
+        selectSourceType('book');
+        document.getElementById('input-title').value = '';
+        document.getElementById('input-reference').value = '';
+        document.getElementById('input-youtube-url').value = '';
+        document.getElementById('input-youtube-transcript').value = '';
+        document.getElementById('input-ai-topic').value = '';
+        document.getElementById('input-fullnotes').value = '';
+        document.getElementById('input-punchline').value = '';
+        renderQuestionFields(['']);
+      }
+
+      document.getElementById('note-modal').classList.remove('hidden');
+    }
+
+    function closeNoteModal() {
+      document.getElementById('note-modal').classList.add('hidden');
+      editingNoteId = null;
+    }
+
+    function selectSourceType(type) {
+      currentSourceType = type;
+      ['book', 'youtube', 'ai', 'other'].forEach(t => {
+        const btn = document.getElementById(`src-btn-${t}`);
+        if (!btn) return;
+        if (t === type) {
+          btn.className = "tap-target flex items-center justify-center space-x-1 py-2 rounded-xl border border-brand-500 bg-brand-500/10 text-white font-medium transition text-[11px]";
+        } else {
+          btn.className = "tap-target flex items-center justify-center space-x-1 py-2 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-400 font-medium transition text-[11px]";
+        }
+      });
+
+      document.getElementById('youtube-url-box').classList.toggle('hidden', type !== 'youtube');
+      document.getElementById('ai-concept-box').classList.toggle('hidden', type !== 'ai');
+    }
+
+    function renderQuestionFields(questionsArray) {
+      const container = document.getElementById('questions-inputs-container');
+      const list = (questionsArray && questionsArray.length > 0) ? questionsArray : [''];
+      container.innerHTML = list.map((q, idx) => `
+        <div class="flex items-center space-x-2">
+          <input type="text" value="${escapeHtml(q)}" placeholder="Question ${idx + 1} pour te tester..." class="question-field-input w-full bg-[#0d0e12] border border-zinc-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-brand-500">
+          ${list.length > 1 ? `<button type="button" onclick="this.parentElement.remove()" class="text-zinc-500 hover:text-rose-400 p-1"><i class="fa-solid fa-xmark"></i></button>` : ''}
+        </div>
+      `).join('');
+    }
+
+    function addQuestionField() {
+      const container = document.getElementById('questions-inputs-container');
+      const div = document.createElement('div');
+      div.className = "flex items-center space-x-2";
+      div.innerHTML = `
+        <input type="text" placeholder="Autre angle de question..." class="question-field-input w-full bg-[#0d0e12] border border-zinc-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-brand-500">
+        <button type="button" onclick="this.parentElement.remove()" class="text-zinc-500 hover:text-rose-400 p-1"><i class="fa-solid fa-xmark"></i></button>
+      `;
+      container.appendChild(div);
+    }
+
+    function getQuestionsFromForm() {
+      const inputs = document.querySelectorAll('.question-field-input');
+      return Array.from(inputs).map(i => i.value.trim()).filter(Boolean);
+    }
+
+    // ==========================================
+    // FONCTIONS IA : CONCEPT, YOUTUBE, DISTILLATION
+    // ==========================================
     async function generateConceptWithAI() {
       const topicInput = document.getElementById('input-ai-topic');
       let topic = topicInput ? topicInput.value.trim() : '';
@@ -960,7 +1628,7 @@ Règles de rédaction impératives pour "cleanNotes" :
 Extrais ou génère en JSON :
 1. "title": Le titre clair et valorisant du concept (ex: "Le Keynésianisme").
 2. "authorOrOrigin": L'auteur, l'initiateur ou l'époque (ex: "John Maynard Keynes (1936)").
-3. "cleanNotes": La note rédigée avec la structure ci-dessus (avec des retours à la ligne bien marqués).
+3. "cleanNotes": La note rédigée avec la structure ci-dessus.
 4. "punchline": 1 phrase percutante et simple qui ancre le concept dans la mémoire.
 5. "suggestedSubcategory": Une sous-catégorie courte (ex: "Économie & Pensée", "Psychologie", "Histoire").
 6. "questions": 3 questions de révision variées (sur le principe de base, l'exemple et la nuance).`;
@@ -1005,20 +1673,9 @@ Extrais ou génère en JSON :
       } catch (e) {
         if (e.message !== "NO_API_KEY") {
           console.warn("Détail erreur API Gemini:", e.message);
-          showToast(`Erreur API : ${e.message.slice(0, 60)}`);
+          showToast(`Erreur API : ${e.message.slice(0, 65)}`);
         }
-        const formattedFallback = `🎯 EN BREF :
-Le ${topic} propose une grille de lecture simple pour comprendre un phénomène précis.
-
-⚙️ COMMENT ÇA FONCTIONNE :
-• Déclencheur : une situation de départ qui nécessite une réaction.
-• Mécanisme : les choix des acteurs influencent l'issue finale.
-
-💡 EXEMPLE CONCRET DU QUOTIDIEN :
-Imagine une situation courante où chacun attend que l'autre agisse : le ${topic} montre comment coordonner les actions pour débloquer l'ensemble.
-
-⚠️ LA NUANCE / LE PIÈGE :
-Ne pas réduire cette approche à un cas isolé, mais l'envisager comme un système global.`;
+        const formattedFallback = `🎯 EN BREF :\nLe ${topic} propose une grille de lecture simple pour comprendre un phénomène précis.\n\n⚙️ COMMENT ÇA FONCTIONNE :\n• Déclencheur : une situation de départ qui nécessite une réaction.\n• Mécanisme : les choix des acteurs influencent l'issue finale.\n\n💡 EXEMPLE CONCRET DU QUOTIDIEN :\nImagine une situation courante où chacun attend que l'autre agisse : le ${topic} montre comment coordonner les actions pour débloquer l'ensemble.\n\n⚠️ LA NUANCE / LE PIÈGE :\nNe pas réduire cette approche à un cas isolé, mais l'envisager comme un système global.`;
 
         document.getElementById('input-title').value = topic.charAt(0).toUpperCase() + topic.slice(1);
         document.getElementById('input-reference').value = "Concept théorique";
@@ -1030,7 +1687,7 @@ Ne pas réduire cette approche à un cas isolé, mais l'envisager comme un syst�
           `Quel piège ou erreur classique faut-il éviter concernant ${topic} ?`
         ]);
         if (e.message === "NO_API_KEY") {
-          showToast("Fiche créée en mode local (ajoute ta clé API dans Synchro Cloud).");
+          showToast("Mode local : ajoute une clé AI Studio dans Synchro Cloud.");
         }
       } finally {
         btn.disabled = false;
@@ -1038,7 +1695,6 @@ Ne pas réduire cette approche à un cas isolé, mais l'envisager comme un syst�
       }
     }
 
-    // FLASH RÉCAP YOUTUBE VIA URL
     async function flashRecapYouTube() {
       const urlInput = document.getElementById('input-youtube-url');
       const transcriptInput = document.getElementById('input-youtube-transcript');
@@ -1082,7 +1738,7 @@ Ne pas réduire cette approche à un cas isolé, mais l'envisager comme un syst�
             }
           }
         } catch (err) {
-          console.warn("oEmbed indisponible, tentative par analyse directe", err);
+          console.warn("oEmbed indisponible", err);
         }
       }
 
@@ -1149,7 +1805,7 @@ Génère en JSON :
       } catch (e) {
         if (e.message !== "NO_API_KEY") {
           console.warn("Erreur API YouTube:", e.message);
-          showToast(`Info API : ${e.message.slice(0, 65)}`);
+          showToast(`Erreur API : ${e.message.slice(0, 65)}`);
         }
         const finalTitle = realTitle || (videoId ? `Vidéo YouTube (${videoId})` : "Vidéo YouTube");
         const finalAuthor = realAuthor ? (url ? `${realAuthor} (${url})` : realAuthor) : url;
@@ -1168,7 +1824,7 @@ Génère en JSON :
           const pt2 = sentences[Math.floor(sentences.length * 0.4)] || "Développement principal de l'argumentation.";
           const pt3 = sentences[Math.floor(sentences.length * 0.75)] || "Conclusion pratique de la présentation.";
 
-          document.getElementById('input-fullnotes').value = `🎯 EN BREF :\nSynthèse extraite de la transcription de "${finalTitle}".\n\n⚙️ POINTS CLÉS EXTRAITS :\n• ${pt1}.\n• ${pt2}.\n• ${pt3}.\n\n💡 EXEMPLE / PASSAGE MARQUANT :\n"${sentences[1] || pt1}."\n\n⚠️ ASTUCE :\nVérifie ta clé API Gemini dans "Synchro Cloud" pour une synthèse IA complète.`;
+          document.getElementById('input-fullnotes').value = `🎯 EN BREF :\nSynthèse extraite de la transcription de "${finalTitle}".\n\n⚙️ POINTS CLÉS EXTRAITS :\n• ${pt1}.\n• ${pt2}.\n• ${pt3}.\n\n💡 EXEMPLE / PASSAGE MARQUANT :\n"${sentences[1] || pt1}."`;
           document.getElementById('input-punchline').value = `${pt1}.`;
           renderQuestionFields([
             `Quelle est l'idée principale développée dans "${finalTitle}" ?`,
@@ -1176,11 +1832,9 @@ Génère en JSON :
           ]);
           showToast("Transcription analysée et structurée ! 📝");
         } else {
-          document.getElementById('input-fullnotes').value = `🎯 EN BREF :\nVidéo "${finalTitle}" par ${realAuthor || 'YouTube'}.\n\n⚙️ POINTS CLÉS :\n• [Complète ici ou colle la transcription de la vidéo au-dessus]\n\n💡 INFO IA :\nPour que l'IA analyse automatiquement n'importe quelle vidéo sur GitHub, vérifie ta clé API dans "Synchro Cloud" en haut à droite.`;
+          document.getElementById('input-fullnotes').value = `🎯 EN BREF :\nVidéo "${finalTitle}" par ${realAuthor || 'YouTube'}.\n\n⚙️ POINTS CLÉS :\n• [Complète ici ou colle la transcription de la vidéo au-dessus]\n\n💡 INFO IA :\nPour activer l'analyse automatique IA sur GitHub, renseigne une clé Google AI Studio (AIzaSy...) dans "Synchro Cloud".`;
           document.getElementById('input-punchline').value = `L'essentiel à retenir de « ${finalTitle} ».`;
-          renderQuestionFields([
-            `Quel est le message central de "${finalTitle}" ?`
-          ]);
+          renderQuestionFields([`Quel est le message central de "${finalTitle}" ?`]);
           if (e.message === "NO_API_KEY") {
             showToast("Titre récupéré ! Ajoute ta clé API dans Synchro Cloud pour l'analyse IA.");
           }
@@ -1241,7 +1895,7 @@ Notes brutes : """${fullText || title}"""`;
         }
       } catch (e) {
         if (e.message !== "NO_API_KEY") {
-          showToast(`Erreur API : ${e.message.slice(0, 60)}`);
+          showToast(`Erreur API : ${e.message.slice(0, 65)}`);
         }
         const cleanFallback = `🎯 EN BREF :\n${title || 'Concept'}\n\n⚙️ POINTS CLÉS :\n• ${fullText.split('.')[0] || 'Idée principale'}.\n\n💡 EXEMPLE CONCRET :\nIllustration pratique du quotidien liée à ce sujet.`;
         document.getElementById('input-fullnotes').value = cleanFallback;
@@ -1284,7 +1938,7 @@ Notes brutes : """${fullText || title}"""`;
           note.question = primaryQuestion;
           note.questions = questionsList;
         }
-        showToast("Fiche mise à jour");
+        showToast("Fiche mise à jour ✅");
       } else {
         const newNote = {
           id: 'note-' + Date.now(),
@@ -1306,7 +1960,7 @@ Notes brutes : """${fullText || title}"""`;
           dueInDays: 0
         };
         notes.unshift(newNote);
-        showToast("Fiche enregistrée");
+        showToast("Fiche enregistrée ✅");
       }
 
       saveStateToStorage();
@@ -1319,6 +1973,9 @@ Notes brutes : """${fullText || title}"""`;
       openNoteModal(id);
     }
 
+    // ==========================================
+    // UTILITAIRES & SYNCHRONISATION
+    // ==========================================
     function toggleMobileSimulator() {
       isMobileSimulator = !isMobileSimulator;
       const body = document.body;
@@ -1349,6 +2006,16 @@ Notes brutes : """${fullText || title}"""`;
       return `<i class="fa-solid fa-lightbulb text-indigo-400"></i>`;
     }
 
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
     function updateDueBadges() {
       const count = notes.length;
       const bDesktop = document.getElementById('badge-due-count');
@@ -1360,20 +2027,32 @@ Notes brutes : """${fullText || title}"""`;
     function showToast(text) {
       const toast = document.getElementById('toast-msg');
       const txt = document.getElementById('toast-text');
+      if (!toast || !txt) return;
       txt.innerText = text;
       toast.classList.remove('-translate-y-16', 'opacity-0', 'pointer-events-none');
       setTimeout(() => {
         toast.classList.add('-translate-y-16', 'opacity-0', 'pointer-events-none');
-      }, 2500);
+      }, 3000);
     }
 
-    // GESTION SYNCHRO / SAUVEGARDE
     function openSyncModal() {
+      const keyInput = document.getElementById('gemini-api-key-input');
+      if (keyInput) keyInput.value = getGeminiApiKey();
+      const idField = document.getElementById('sync-user-id-field');
+      if (idField && window.cloudUserId) idField.value = window.cloudUserId;
       document.getElementById('sync-modal').classList.remove('hidden');
     }
 
     function closeSyncModal() {
       document.getElementById('sync-modal').classList.add('hidden');
+    }
+
+    function copySyncId() {
+      const idField = document.getElementById('sync-user-id-field');
+      if (!idField) return;
+      idField.select();
+      document.execCommand('copy');
+      showToast("Identifiant copié ! 📋");
     }
 
     function exportDataToFile() {
@@ -1386,7 +2065,7 @@ Notes brutes : """${fullText || title}"""`;
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `synapse-notes-backup-${new Date().toISOString().slice(0,10)}.json`;
+      a.download = `synapse-notes-backup-${new Date().toISOString().slice(0, 10)}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -1420,6 +2099,15 @@ Notes brutes : """${fullText || title}"""`;
       };
       reader.readAsText(file);
     }
+
+    // ==========================================
+    // INITIALISATION AU DÉMARRAGE
+    // ==========================================
+    window.addEventListener('DOMContentLoaded', () => {
+      initCategoriesUI();
+      renderDashboard();
+      renderNotesList();
+    });
   </script>
 </body>
 </html>
