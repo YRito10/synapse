@@ -1,0 +1,2349 @@
+<!DOCTYPE html>
+<html lang="fr" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Synapse — Mon Second Cerveau & Mémoire</title>
+  
+  <!-- Métadonnées PWA & Installation Écran d'accueil -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Synapse">
+  <meta name="theme-color" content="#0d0e12">
+  <meta name="mobile-web-app-capable" content="yes">
+
+  <!-- Firebase Cloud Sync (App + Auth + Firestore) -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, collection, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // Configuration Firebase globale fournie par l'environnement
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'synapse-personal-brain';
+    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+
+    let db = null;
+    let auth = null;
+    let currentUser = null;
+
+    if (firebaseConfig) {
+      const app = initializeApp(firebaseConfig);
+      auth = getAuth(app);
+      db = getFirestore(app);
+
+      async function initAuth() {
+        try {
+          if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+            await signInWithCustomToken(auth, __initial_auth_token);
+          } else {
+            await signInAnonymously(auth);
+          }
+          currentUser = auth.currentUser;
+          window.cloudUserId = currentUser?.uid;
+          window.isCloudReady = true;
+          document.dispatchEvent(new CustomEvent('cloud-ready', { detail: { uid: currentUser?.uid } }));
+        } catch (err) {
+          console.warn("Erreur Auth Cloud", err);
+        }
+      }
+      initAuth();
+    }
+
+    // Expose aux fonctions globales
+    window.cloudSave = async function(dataNotes, dataTaxonomy) {
+      if (!db || !currentUser) return false;
+      try {
+        const userDocRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'brain', 'current');
+        await setDoc(userDocRef, {
+          notes: dataNotes,
+          taxonomy: dataTaxonomy,
+          updatedAt: new Date().toISOString()
+        });
+        return true;
+      } catch (e) {
+        console.warn("Erreur sauvegarde cloud", e);
+        return false;
+      }
+    };
+
+    window.cloudListen = function(callback) {
+      if (!db || !currentUser) return;
+      const userDocRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'brain', 'current');
+      onSnapshot(userDocRef, (docSnap) => {
+        if (docSnap.exists()) {
+          const val = docSnap.data();
+          callback(val);
+        }
+      }, (err) => {
+        console.warn("Erreur écoute cloud", err);
+      });
+    };
+  </script>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts & FontAwesome Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#f5f3ff',
+              100: '#ede9fe',
+              500: '#8b5cf6',
+              600: '#7c3aed',
+              700: '#6d28d9',
+            },
+            surface: {
+              50: '#18181b', // Fond cartes épurées
+              100: '#27272a',
+              border: '#27272a',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Cartes Flashcard 3D flip */
+    .perspective-1000 {
+      perspective: 1000px;
+    }
+    .transform-style-3d {
+      transform-style: preserve-3d;
+    }
+    .backface-hidden {
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+    }
+    .rotate-y-180 {
+      transform: rotateY(180deg);
+    }
+    /* Masquer la scrollbar tout en conservant le scroll fluide */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    /* Touch target confort Apple standard */
+    .tap-target {
+      min-height: 44px;
+      min-width: 44px;
+    }
+  </style>
+</head>
+<body class="h-full bg-[#0d0e12] text-zinc-100 font-sans antialiased flex flex-col md:flex-row overflow-hidden selection:bg-brand-600 selection:text-white">
+
+  <!-- =============================== -->
+  <!-- NAVIGATION LATERALE (Desktop uniquement) -->
+  <!-- =============================== -->
+  <aside class="hidden md:flex flex-col w-64 bg-[#121318] border-r border-zinc-800/60 p-6 shrink-0 justify-between select-none">
+    <div class="space-y-8">
+      <!-- Logo Minimaliste -->
+      <div class="flex items-center space-x-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-brand-500/20 font-bold">
+          <i class="fa-solid fa-brain text-sm"></i>
+        </div>
+        <span class="font-extrabold text-base tracking-tight text-white">Synapse</span>
+      </div>
+
+      <!-- Navigation Desktop -->
+      <nav class="space-y-1.5">
+        <button onclick="switchTab('dashboard')" id="nav-dashboard" class="w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all text-white bg-zinc-800/80">
+          <i class="fa-solid fa-house-chimney w-5 text-zinc-400"></i>
+          <span>Aujourd'hui</span>
+        </button>
+        <button onclick="switchTab('review')" id="nav-review" class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all text-zinc-400 hover:text-white hover:bg-zinc-800/40">
+          <div class="flex items-center space-x-3">
+            <i class="fa-solid fa-bolt-lightning w-5 text-amber-400"></i>
+            <span>Session 5 min</span>
+          </div>
+          <span id="badge-due-count" class="bg-zinc-800 text-amber-400 text-xs px-2 py-0.5 rounded-full font-bold">5</span>
+        </button>
+        <button onclick="switchTab('notes')" id="nav-notes" class="w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all text-zinc-400 hover:text-white hover:bg-zinc-800/40">
+          <i class="fa-solid fa-layer-group w-5 text-zinc-400"></i>
+          <span>Bibliothèque</span>
+        </button>
+      </nav>
+
+      <!-- Liste Catégories Minimaliste -->
+      <div class="pt-4 border-t border-zinc-800/50">
+        <div class="flex items-center justify-between text-xs font-semibold text-zinc-400 mb-3 uppercase tracking-wider">
+          <span>Catégories</span>
+          <button onclick="openManageTaxonomyModal()" class="hover:text-brand-400 text-zinc-400 p-1" title="Gérer ou ajouter une catégorie"><i class="fa-solid fa-plus"></i></button>
+        </div>
+        <div id="desktop-category-list" class="space-y-1 text-sm text-zinc-400 max-h-48 overflow-y-auto no-scrollbar">
+          <!-- Dynamique -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Bouton CTA Desktop -->
+    <button onclick="openNoteModal()" class="w-full flex items-center justify-center space-x-2 py-3 bg-brand-600 hover:bg-brand-500 rounded-xl font-semibold text-sm transition text-white shadow-lg shadow-brand-600/20 active:scale-95">
+      <i class="fa-solid fa-plus text-xs"></i>
+      <span>Nouvelle Fiche</span>
+    </button>
+  </aside>
+
+  <!-- =============================== -->
+  <!-- CONTENU PRINCIPAL ÉPURÉ -->
+  <!-- =============================== -->
+  <main class="flex-1 flex flex-col h-full overflow-hidden bg-[#0d0e12]">
+
+    <!-- En-tête simple et aéré -->
+    <header class="h-14 sm:h-16 px-4 sm:px-8 border-b border-zinc-800/40 flex items-center justify-between shrink-0 bg-[#0d0e12]/80 backdrop-blur-md z-10">
+      <div class="flex items-center space-x-3">
+        <!-- Logo mobile compact -->
+        <div class="md:hidden w-8 h-8 rounded-lg bg-brand-600 flex items-center justify-center text-white text-xs font-bold">
+          <i class="fa-solid fa-brain"></i>
+        </div>
+        <div>
+          <h2 id="header-title" class="font-bold text-white text-base tracking-tight">Bonjour</h2>
+          <p id="header-subtitle" class="text-xs text-zinc-400 hidden sm:block">Prends 5 minutes pour ancrer tes lectures</p>
+        </div>
+      </div>
+
+      <!-- Actions Header -->
+      <div class="flex items-center space-x-2">
+        <button onclick="openSyncModal()" class="flex items-center space-x-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 px-2.5 py-1.5 rounded-lg text-xs font-medium transition" title="Synchroniser / Sauvegarder">
+          <i class="fa-solid fa-cloud text-brand-400"></i>
+          <span class="hidden sm:inline">Synchro Cloud</span>
+        </button>
+        <button id="btn-toggle-mobile-view" onclick="toggleMobileSimulator()" class="hidden md:flex items-center space-x-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 px-3 py-1.5 rounded-lg text-xs font-medium transition" title="Simuler l'affichage smartphone">
+          <i class="fa-solid fa-mobile-screen-button text-brand-400"></i>
+          <span id="simulator-btn-text">Vue Téléphone</span>
+        </button>
+        <span id="cloud-status-indicator" class="text-xs font-medium text-zinc-400 bg-zinc-900/80 px-2.5 py-1 rounded-full border border-zinc-800 flex items-center space-x-1.5">
+          <span id="cloud-status-dot" class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+          <span id="cloud-status-label">Local</span>
+        </span>
+      </div>
+    </header>
+
+    <!-- Zone Défilable -->
+    <div id="content-container" class="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6 max-w-4xl mx-auto w-full no-scrollbar pb-24 md:pb-8">
+
+      <!-- ========================================== -->
+      <!-- VUE 1 : AUJOURD'HUI (ACCUEIL NET & ÉPURÉ) -->
+      <!-- ========================================== -->
+      <section id="view-dashboard" class="space-y-6">
+
+        <!-- CARTE D'ACTION UNIQUE : LA SESSION 5 MIN -->
+        <div class="bg-gradient-to-b from-[#181920] to-[#121318] border border-zinc-800/80 rounded-2xl p-5 sm:p-6 shadow-sm">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div class="space-y-1">
+              <span class="text-[11px] font-semibold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                <i class="fa-solid fa-bolt-lightning text-xs"></i>
+                <span>Pause Révision</span>
+              </span>
+              <h3 class="text-lg font-bold text-white tracking-tight">Session Express du Jour</h3>
+              <p class="text-xs text-zinc-400">5 cartes prêtes à être mémorisées dans les transports ou en pause.</p>
+            </div>
+            
+            <div class="flex items-center gap-2">
+              <button onclick="startRandomEcho()" class="tap-target px-3.5 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-medium text-xs rounded-xl transition flex items-center justify-center space-x-1.5 border border-zinc-700/60" title="Tirer une note oubliée au hasard">
+                <i class="fa-solid fa-shuffle text-xs text-brand-400"></i>
+                <span class="hidden sm:inline">Écho Aléatoire</span>
+              </button>
+              <button onclick="startExpressSession(5)" class="tap-target px-5 py-3 bg-amber-400 hover:bg-amber-300 text-zinc-950 font-bold text-xs rounded-xl transition flex items-center justify-center space-x-2 shadow-md active:scale-95 shrink-0">
+                <i class="fa-solid fa-play text-[11px]"></i>
+                <span>Lancer mes 5 min</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- CITATION / PUNCHLINE DU JOUR (UNE SEULE ET ÉPURÉE) -->
+        <div class="relative bg-[#13141a] border border-zinc-800/60 rounded-2xl p-5 space-y-3">
+          <div class="flex items-center justify-between text-xs text-zinc-400">
+            <span class="font-medium tracking-wide text-brand-400 flex items-center gap-1.5">
+              <i class="fa-regular fa-compass text-xs"></i>
+              <span>Pensée du jour</span>
+            </span>
+            <button onclick="rerollDailyPunchline()" class="text-zinc-500 hover:text-zinc-300 text-xs p-1" title="Changer de citation">
+              <i class="fa-solid fa-arrows-rotate text-[10px]"></i>
+            </button>
+          </div>
+
+          <p id="daily-punchline-text" class="text-sm sm:text-base text-zinc-200 font-medium leading-relaxed italic">
+            « Tu ne t'élèves pas au niveau de tes objectifs, tu retombes au niveau de tes systèmes. »
+          </p>
+
+          <div class="flex items-center justify-between text-xs text-zinc-400 pt-1">
+            <span id="daily-punchline-source" class="font-medium text-zinc-300 truncate">James Clear</span>
+            <span id="daily-punchline-category" class="text-[11px] bg-zinc-800/70 text-zinc-300 px-2 py-0.5 rounded-md">Histoire</span>
+          </div>
+        </div>
+
+        <!-- CATÉGORIES EN BARRE DE SCROLL HORIZONTAL (EXPÉRIENCE MOBILE OPTIMALE) -->
+        <div class="space-y-2.5">
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs font-semibold uppercase tracking-wider text-zinc-400">Catégories</h4>
+            <button onclick="switchTab('notes')" class="text-xs text-brand-400 hover:underline">Voir tout</button>
+          </div>
+          <!-- Horizontal Chips / Pills -->
+          <div id="category-pills-row" class="flex items-center space-x-2 overflow-x-auto no-scrollbar py-1 -mx-4 px-4 sm:mx-0 sm:px-0">
+            <!-- Dynamique -->
+          </div>
+        </div>
+
+        <!-- DERNIÈRES FICHES AJOUTÉES (CARTES LISIBLES ET COMPACTES) -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs font-semibold uppercase tracking-wider text-zinc-400">Dernières captures</h4>
+            <span class="text-xs text-zinc-400" id="stat-total-notes">5 fiches</span>
+          </div>
+          <div id="dashboard-recent-notes" class="space-y-2.5">
+            <!-- Injecté dynamiquement -->
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ========================================== -->
+      <!-- VUE 2 : SESSION INTERACTIVE (FOCUS TOTAL) -->
+      <!-- ========================================== -->
+      <section id="view-review" class="hidden max-w-xl mx-auto space-y-5">
+        
+        <!-- En-tête session : minimaliste -->
+        <div class="flex items-center justify-between text-xs text-zinc-400">
+          <button onclick="switchTab('dashboard')" class="hover:text-white flex items-center space-x-1.5">
+            <i class="fa-solid fa-chevron-left text-[10px]"></i>
+            <span>Quitter</span>
+          </button>
+          <span id="review-progress-text" class="font-semibold text-zinc-200">1 / 5</span>
+          <div class="flex items-center space-x-1 bg-zinc-900 border border-zinc-800 rounded-lg p-0.5">
+            <button id="btn-mode-flashcard" onclick="setReviewMode('flashcard')" class="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-brand-600 text-white">Carte</button>
+            <button id="btn-mode-quiz" onclick="setReviewMode('quiz')" class="px-2.5 py-1 rounded-md text-[11px] font-semibold text-zinc-400">Quizz</button>
+          </div>
+        </div>
+
+        <!-- Barre de progression discrète -->
+        <div class="w-full bg-zinc-800/80 h-1 rounded-full overflow-hidden">
+          <div id="review-progress-bar" class="bg-brand-500 h-full w-1/5 transition-all duration-300"></div>
+        </div>
+
+        <!-- FLASHCARD 3D TACTILE -->
+        <div id="review-flashcard-box" class="perspective-1000 min-h-[300px] cursor-pointer" onclick="flipFlashcard()">
+          <div id="flashcard-inner" class="relative w-full h-80 rounded-2xl transition-transform duration-500 transform-style-3d shadow-lg">
+            
+            <!-- RECTO -->
+            <div class="absolute inset-0 w-full h-full bg-[#15161c] border border-zinc-800 rounded-2xl p-6 flex flex-col justify-between backface-hidden">
+              <div class="flex items-center justify-between text-xs text-zinc-400">
+                <span id="card-hierarchy" class="font-medium text-zinc-400">Histoire</span>
+                <span id="card-source-tag" class="truncate max-w-[150px]">Livre</span>
+              </div>
+
+              <div class="my-auto text-center space-y-3 px-2">
+                <p id="card-question-text" class="text-base sm:text-lg font-bold text-white leading-relaxed">
+                  Question mémorielle
+                </p>
+                <!-- Astuce Feynman -->
+                <div class="p-2.5 bg-zinc-900/80 rounded-xl border border-zinc-800 text-[11px] text-zinc-400 max-w-sm mx-auto">
+                  💡 <span class="text-zinc-300 font-medium">Auto-test :</span> Formule ta réponse mentalement en 1 phrase avant de retourner la carte.
+                </div>
+                <span class="inline-block text-[11px] text-brand-300 border border-brand-500/30 bg-brand-500/10 px-3.5 py-1 rounded-full font-medium">
+                  Toucher pour révéler
+                </span>
+              </div>
+
+              <div class="text-[11px] text-zinc-500 text-center">
+                Flashcard Recto
+              </div>
+            </div>
+
+            <!-- VERSO -->
+            <div class="absolute inset-0 w-full h-full bg-[#181524] border border-brand-500/60 rounded-2xl p-6 flex flex-col justify-between backface-hidden rotate-y-180">
+              <div class="flex items-center justify-between text-xs text-brand-300">
+                <span>Punchline à retenir</span>
+                <button type="button" onclick="copyCardPunchline(event)" class="text-zinc-400 hover:text-white text-[11px] flex items-center space-x-1" title="Copier la punchline">
+                  <i class="fa-regular fa-copy"></i>
+                  <span>Copier</span>
+                </button>
+              </div>
+
+              <div class="my-auto space-y-3">
+                <p id="card-answer-punchline" class="text-base sm:text-lg font-bold text-white leading-relaxed">
+                  « Réponse mémorable »
+                </p>
+                <div id="card-fullnote-preview" class="p-3 bg-black/40 rounded-xl text-xs text-zinc-300 max-h-24 overflow-y-auto no-scrollbar font-normal leading-relaxed">
+                  Note détaillée...
+                </div>
+              </div>
+
+              <div class="text-[11px] text-zinc-500 text-center">
+                Flashcard Verso
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ZONE QUIZZ QCM -->
+        <div id="review-quiz-box" class="hidden bg-[#15161c] border border-zinc-800 rounded-2xl p-5 sm:p-6 space-y-4">
+          <div class="flex items-center justify-between text-xs text-zinc-400">
+            <span class="text-amber-400 font-semibold">Quizz Express</span>
+            <span id="quiz-source-tag" class="truncate max-w-[140px]">Source</span>
+          </div>
+
+          <h4 id="quiz-question-text" class="text-base font-bold text-white leading-snug">
+            Question
+          </h4>
+
+          <div id="quiz-options-container" class="space-y-2.5 pt-1">
+            <!-- Options dynamiques -->
+          </div>
+
+          <div id="quiz-explanation-box" class="hidden p-3.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs space-y-1">
+            <span class="text-zinc-400 font-semibold">L'essentiel :</span>
+            <p id="quiz-explanation-text" class="text-zinc-200"></p>
+          </div>
+        </div>
+
+        <!-- Boutons d'auto-évaluation Flashcard (Grands pour les doigts) -->
+        <div id="flashcard-actions" class="grid grid-cols-3 gap-2 sm:gap-3 pt-1">
+          <button onclick="handleCardAnswer('hard')" class="tap-target py-3 px-2 bg-zinc-900 hover:bg-rose-950/30 text-rose-400 border border-zinc-800 rounded-xl text-xs font-semibold flex flex-col items-center justify-center space-y-1 active:scale-95 transition">
+            <i class="fa-solid fa-rotate-left text-xs"></i>
+            <span>À revoir</span>
+          </button>
+          <button onclick="handleCardAnswer('good')" class="tap-target py-3 px-2 bg-zinc-900 hover:bg-amber-950/30 text-amber-300 border border-zinc-800 rounded-xl text-xs font-semibold flex flex-col items-center justify-center space-y-1 active:scale-95 transition">
+            <i class="fa-solid fa-check text-xs"></i>
+            <span>Retenu</span>
+          </button>
+          <button onclick="handleCardAnswer('easy')" class="tap-target py-3 px-2 bg-zinc-900 hover:bg-emerald-950/30 text-emerald-400 border border-zinc-800 rounded-xl text-xs font-semibold flex flex-col items-center justify-center space-y-1 active:scale-95 transition">
+            <i class="fa-solid fa-bolt text-xs"></i>
+            <span>Parfait</span>
+          </button>
+        </div>
+
+        <!-- Bouton Suivant pour le Quizz -->
+        <div id="quiz-actions" class="hidden pt-1">
+          <button id="quiz-next-btn" onclick="nextCard()" disabled class="tap-target w-full py-3.5 bg-brand-600 disabled:opacity-40 hover:bg-brand-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center space-x-2">
+            <span>Continuer</span>
+            <i class="fa-solid fa-arrow-right text-[11px]"></i>
+          </button>
+        </div>
+
+      </section>
+
+      <!-- ========================================== -->
+      <!-- VUE 3 : BIBLIOTHÈQUE / RECHERCHE -->
+      <!-- ========================================== -->
+      <section id="view-notes" class="hidden space-y-4">
+        
+        <!-- Barre de recherche épurée -->
+        <div class="relative">
+          <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 text-xs"></i>
+          <input type="text" id="notes-search-input" oninput="renderNotesList()" placeholder="Rechercher une note, mot-clé, idée..." class="tap-target w-full bg-[#15161c] border border-zinc-800 text-white pl-9 pr-4 py-2.5 rounded-xl text-xs focus:outline-none focus:border-brand-500 transition">
+        </div>
+
+        <!-- Filtres horizontaux épurés -->
+        <div class="flex items-center space-x-2 overflow-x-auto no-scrollbar py-1">
+          <button onclick="filterByType('all')" id="filter-type-all" class="filter-chip px-3 py-1.5 rounded-lg text-xs font-medium bg-brand-600 text-white whitespace-nowrap">Tous</button>
+          <button onclick="filterByType('book')" id="filter-type-book" class="filter-chip px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-white whitespace-nowrap">📚 Livres</button>
+          <button onclick="filterByType('youtube')" id="filter-type-youtube" class="filter-chip px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-white whitespace-nowrap">🎥 YouTube</button>
+          <button onclick="filterByType('ai')" id="filter-type-ai" class="filter-chip px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-white whitespace-nowrap">🤖 IA</button>
+          <button onclick="filterByType('other')" id="filter-type-other" class="filter-chip px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-white whitespace-nowrap">💡 Autres</button>
+        </div>
+
+        <!-- Filtre par Catégories et Sous-Catégories (Thématiques) -->
+        <div class="space-y-1.5 pt-1 border-t border-zinc-800/40">
+          <div class="flex items-center justify-between text-[11px] text-zinc-400 font-medium">
+            <span class="flex items-center gap-1.5">
+              <span>Thématique :</span>
+              <button onclick="openManageTaxonomyModal()" class="text-brand-400 hover:text-brand-300 font-semibold text-[11px] flex items-center gap-1">
+                <i class="fa-solid fa-gear text-[10px]"></i>
+                <span>Gérer</span>
+              </button>
+            </span>
+            <button onclick="filterByTaxonomy('all')" class="text-brand-400 hover:underline">Réinitialiser</button>
+          </div>
+          <div id="taxonomy-filter-pills" class="flex items-center space-x-1.5 overflow-x-auto no-scrollbar py-1">
+            <!-- Injecté dynamiquement -->
+          </div>
+        </div>
+
+        <!-- Liste des Fiches : Cartes légères & lisibles -->
+        <div id="notes-cards-container" class="space-y-3">
+          <!-- Injecté dynamiquement -->
+        </div>
+
+      </section>
+
+    </div>
+
+    <!-- =============================== -->
+    <!-- BARRE DE NAVIGATION FLOTTANTE MOBILE (Ergonomie moderne) -->
+    <!-- =============================== -->
+    <nav class="md:hidden fixed bottom-3 left-4 right-4 h-16 bg-[#16171f]/90 border border-zinc-800/80 rounded-2xl flex items-center justify-around px-3 z-30 shadow-2xl backdrop-blur-xl">
+      <button onclick="switchTab('dashboard')" id="mobile-nav-dashboard" class="tap-target flex flex-col items-center justify-center w-14 text-brand-400">
+        <i class="fa-solid fa-house text-base"></i>
+        <span class="text-[10px] font-semibold mt-1">Accueil</span>
+      </button>
+      
+      <!-- Bouton Central Flottant Ajout (+) -->
+      <button onclick="openNoteModal()" class="tap-target -mt-5 w-12 h-12 rounded-full bg-brand-600 hover:bg-brand-500 text-white flex items-center justify-center shadow-lg shadow-brand-600/40 active:scale-95 transition">
+        <i class="fa-solid fa-plus text-sm"></i>
+      </button>
+
+      <button onclick="switchTab('review')" id="mobile-nav-review" class="tap-target relative flex flex-col items-center justify-center w-14 text-zinc-400">
+        <div class="relative">
+          <i class="fa-solid fa-bolt-lightning text-base"></i>
+          <span id="mobile-badge-due" class="absolute -top-1 -right-2 bg-amber-400 text-zinc-950 font-black text-[9px] w-3.5 h-3.5 rounded-full flex items-center justify-center">5</span>
+        </div>
+        <span class="text-[10px] font-semibold mt-1">Réviser</span>
+      </button>
+      
+      <button onclick="switchTab('notes')" id="mobile-nav-notes" class="tap-target flex flex-col items-center justify-center w-14 text-zinc-400">
+        <i class="fa-solid fa-layer-group text-base"></i>
+        <span class="text-[10px] font-semibold mt-1">Fiches</span>
+      </button>
+    </nav>
+  </main>
+
+  <!-- ======================================================== -->
+  <!-- MODAL GESTION DES CATÉGORIES & THÉMATIQUES -->
+  <!-- ======================================================== -->
+  <div id="taxonomy-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="bg-[#15161c] border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-2xl w-full max-w-md max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      <div class="px-5 py-4 border-b border-zinc-800 flex items-center justify-between shrink-0">
+        <h3 class="font-bold text-white text-sm flex items-center gap-2">
+          <i class="fa-solid fa-folder-tree text-brand-400"></i>
+          <span>Gestion des Catégories & Thématiques</span>
+        </h3>
+        <button onclick="closeManageTaxonomyModal()" class="text-zinc-400 hover:text-white p-1">
+          <i class="fa-solid fa-xmark text-base"></i>
+        </button>
+      </div>
+
+      <div class="p-5 space-y-5 overflow-y-auto no-scrollbar flex-1 text-xs">
+        <!-- 1. Ajouter une Catégorie Principale -->
+        <div class="space-y-2 bg-[#0d0e12] p-3.5 rounded-xl border border-zinc-800">
+          <label class="font-semibold text-zinc-300 uppercase tracking-wider text-[10px]">Nouvelle Catégorie Principale</label>
+          <div class="flex items-center space-x-2">
+            <input type="text" id="new-cat-input" placeholder="Ex: Philosophie, Économie..." class="w-full bg-[#15161c] border border-zinc-800 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:border-brand-500">
+            <button onclick="handleAddCategoryFromModal()" class="px-3.5 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-lg font-bold shrink-0 transition">
+              Ajouter
+            </button>
+          </div>
+        </div>
+
+        <!-- 2. Ajouter une Sous-Thématique -->
+        <div class="space-y-2 bg-[#0d0e12] p-3.5 rounded-xl border border-zinc-800">
+          <label class="font-semibold text-zinc-300 uppercase tracking-wider text-[10px]">Nouvelle Sous-Thématique</label>
+          <div class="space-y-2">
+            <select id="modal-parent-cat-select" class="w-full bg-[#15161c] border border-zinc-800 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:border-brand-500">
+              <!-- Dynamique -->
+            </select>
+            <div class="flex items-center space-x-2">
+              <input type="text" id="new-sub-input" placeholder="Ex: Stoïcisme, Guerre froide..." class="w-full bg-[#15161c] border border-zinc-800 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:border-brand-500">
+              <button onclick="handleAddSubcategoryFromModal()" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold shrink-0 transition">
+                Ajouter
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Arborescence actuelle -->
+        <div class="space-y-2">
+          <label class="font-semibold text-zinc-400 uppercase tracking-wider text-[10px]">Thématiques existantes</label>
+          <div id="modal-taxonomy-tree" class="space-y-2 max-h-52 overflow-y-auto no-scrollbar">
+            <!-- Dynamique -->
+          </div>
+        </div>
+      </div>
+
+      <div class="p-3 border-t border-zinc-800 bg-[#121318] flex justify-end shrink-0">
+        <button onclick="closeManageTaxonomyModal()" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white font-semibold rounded-xl text-xs">Terminé</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MODAL DE CRÉATION & MODIFICATION DE FICHE (TIROIR MOBILE / MODAL DESKTOP) -->
+  <!-- ======================================================== -->
+  <div id="note-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="bg-[#15161c] border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-2xl w-full max-w-lg max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+      
+      <!-- En-tête Tiroir -->
+      <div class="px-5 py-4 border-b border-zinc-800 flex items-center justify-between shrink-0">
+        <h3 id="modal-title" class="font-bold text-white text-sm">Nouvelle Fiche</h3>
+        <button onclick="closeNoteModal()" class="text-zinc-400 hover:text-white p-1">
+          <i class="fa-solid fa-xmark text-base"></i>
+        </button>
+      </div>
+
+      <!-- Corps du formulaire -->
+      <div class="p-5 space-y-4 overflow-y-auto no-scrollbar flex-1 text-xs">
+        
+        <!-- Sélecteur de type de média -->
+        <div class="grid grid-cols-4 gap-1.5 bg-[#0d0e12] p-1 rounded-2xl border border-zinc-800">
+          <button type="button" id="src-btn-book" onclick="selectSourceType('book')" class="tap-target flex items-center justify-center space-x-1 py-2 rounded-xl border border-brand-500 bg-brand-500/10 text-white font-medium transition text-[11px]">
+            <i class="fa-solid fa-book text-amber-300"></i>
+            <span>Livre</span>
+          </button>
+          <button type="button" id="src-btn-youtube" onclick="selectSourceType('youtube')" class="tap-target flex items-center justify-center space-x-1 py-2 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-400 font-medium transition text-[11px]">
+            <i class="fa-brands fa-youtube text-red-400"></i>
+            <span>YouTube</span>
+          </button>
+          <button type="button" id="src-btn-ai" onclick="selectSourceType('ai')" class="tap-target flex items-center justify-center space-x-1 py-2 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-400 font-medium transition text-[11px]">
+            <i class="fa-solid fa-robot text-brand-400"></i>
+            <span>IA</span>
+          </button>
+          <button type="button" id="src-btn-other" onclick="selectSourceType('other')" class="tap-target flex items-center justify-center space-x-1 py-2 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-400 font-medium transition text-[11px]">
+            <i class="fa-solid fa-lightbulb text-indigo-400"></i>
+            <span>Autre</span>
+          </button>
+        </div>
+
+        <!-- Champ d'URL YouTube (Flash Récap) -->
+        <div id="youtube-url-box" class="hidden p-3 rounded-xl bg-red-950/20 border border-red-500/30 space-y-2">
+          <label class="font-semibold text-red-300 flex items-center gap-1.5">
+            <i class="fa-brands fa-youtube"></i>
+            <span>Flash Récap YouTube par lien</span>
+          </label>
+          <div class="flex items-center space-x-2">
+            <input type="url" id="input-youtube-url" placeholder="Coller le lien YouTube (https://youtu.be/...)" class="w-full bg-[#0d0e12] border border-zinc-800 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:border-red-500">
+            <button type="button" id="btn-fetch-youtube" onclick="flashRecapYouTube()" class="px-3 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-bold shrink-0 transition flex items-center space-x-1">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              <span>Analyser</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Champ Sujet/Concept pour IA -->
+        <div id="ai-concept-box" class="hidden p-3 rounded-xl bg-purple-950/20 border border-brand-500/30 space-y-2">
+          <label class="font-semibold text-brand-300 flex items-center gap-1.5">
+            <i class="fa-solid fa-robot"></i>
+            <span>Générer un concept avec l'IA</span>
+          </label>
+          <div class="flex items-center space-x-2">
+            <input type="text" id="input-ai-topic" placeholder="Ex: Keynésianisme, Biais de confirmation..." class="w-full bg-[#0d0e12] border border-zinc-800 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:border-brand-500">
+            <button type="button" id="btn-fetch-ai-concept" onclick="generateConceptWithAI()" class="px-3 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-lg font-bold shrink-0 transition flex items-center space-x-1">
+              <i class="fa-solid fa-sparkles"></i>
+              <span>Créer la Fiche</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Titre & Référence -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="space-y-1">
+            <label id="label-source-title" class="font-semibold text-zinc-300">Titre *</label>
+            <input type="text" id="input-title" placeholder="Titre de la note ou du livre..." class="tap-target w-full bg-[#0d0e12] border border-zinc-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-brand-500">
+          </div>
+          <div class="space-y-1">
+            <label id="label-source-author" class="font-semibold text-zinc-300">Auteur ou Source</label>
+            <input type="text" id="input-reference" placeholder="Auteur, chaîne..." class="tap-target w-full bg-[#0d0e12] border border-zinc-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-brand-500">
+          </div>
+        </div>
+
+        <!-- Catégorie & Sous-Catégorie -->
+        <div class="grid grid-cols-2 gap-3">
+          <div class="space-y-1">
+            <div class="flex items-center justify-between">
+              <label class="font-semibold text-zinc-300">Catégorie</label>
+              <button type="button" onclick="openManageTaxonomyModal()" class="text-brand-400 hover:underline text-[10px] flex items-center gap-0.5">
+                <i class="fa-solid fa-plus text-[9px]"></i>
+                <span>Créer</span>
+              </button>
+            </div>
+            <select id="select-category" onchange="updateSubcategoriesSelect()" class="tap-target w-full bg-[#0d0e12] border border-zinc-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-brand-500">
+              <!-- Dynamique -->
+            </select>
+          </div>
+          <div class="space-y-1">
+            <div class="flex items-center justify-between">
+              <label class="font-semibold text-zinc-300">Sous-Thème</label>
+              <button type="button" onclick="openManageTaxonomyModal()" class="text-brand-400 hover:underline text-[10px] flex items-center gap-0.5">
+                <i class="fa-solid fa-plus text-[9px]"></i>
+                <span>Créer</span>
+              </button>
+            </div>
+            <select id="select-subcategory" class="tap-target w-full bg-[#0d0e12] border border-zinc-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-brand-500">
+              <!-- Dynamique -->
+            </select>
+          </div>
+        </div>
+
+        <!-- Zone de notes complètes avec bouton magique -->
+        <div class="space-y-1.5">
+          <div class="flex items-center justify-between">
+            <label class="font-semibold text-zinc-300">Notes détaillées & Synthèse</label>
+            <button type="button" id="btn-distill-ai" onclick="distillNotesWithAI()" class="text-amber-400 hover:text-amber-300 font-semibold flex items-center space-x-1 bg-amber-400/10 border border-amber-400/30 px-2 py-0.5 rounded-md">
+              <i class="fa-solid fa-wand-magic-sparkles text-[10px]"></i>
+              <span>Mettre au propre & Distiller</span>
+            </button>
+          </div>
+          <textarea id="input-fullnotes" rows="6" placeholder="Colle ou saisis tes notes brutes ici..." class="w-full bg-[#0d0e12] border border-zinc-800 rounded-xl p-3 text-white text-xs focus:outline-none focus:border-brand-500 font-mono leading-relaxed"></textarea>
+        </div>
+
+        <!-- Punchline à mémoriser -->
+        <div class="space-y-1">
+          <label class="font-semibold text-zinc-300 flex items-center justify-between">
+            <span>Punchline à retenir (1 à 2 phrases clés) *</span>
+          </label>
+          <input type="text" id="input-punchline" placeholder="L'idée maîtresse résumée..." class="tap-target w-full bg-[#0d0e12] border border-zinc-800 rounded-xl px-3 py-2 text-amber-300 text-xs focus:outline-none focus:border-brand-500 font-medium">
+        </div>
+
+        <!-- Questions variées pour la révision -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="font-semibold text-zinc-300">Questions de Révision (Angles variés)</label>
+            <button type="button" onclick="addQuestionField()" class="text-brand-400 hover:underline text-[10px]">+ Ajouter un angle</button>
+          </div>
+          <div id="questions-inputs-container" class="space-y-2">
+            <!-- Dynamique -->
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Actions de pied -->
+      <div class="p-3 border-t border-zinc-800 bg-[#121318] flex items-center justify-between shrink-0">
+        <button type="button" id="btn-delete-current-note" onclick="triggerDeleteFromModal()" class="hidden px-3 py-2 rounded-xl text-rose-400 hover:bg-rose-950/30 text-xs font-semibold flex items-center gap-1.5 transition">
+          <i class="fa-solid fa-trash-can"></i>
+          <span>Supprimer</span>
+        </button>
+        <div class="flex items-center space-x-2 ml-auto">
+          <button type="button" onclick="closeNoteModal()" class="px-4 py-2.5 rounded-xl border border-zinc-800 text-zinc-400 hover:text-white font-medium text-xs">Annuler</button>
+          <button type="button" onclick="saveNote()" class="px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs shadow-lg shadow-brand-600/30 active:scale-95 transition">Enregistrer la Fiche</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MODAL DE CONFIRMATION DE SUPPRESSION (SANS ALERT/CONFIRM) -->
+  <!-- ======================================================== -->
+  <div id="delete-confirm-modal" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-[60] hidden flex items-center justify-center p-4">
+    <div class="bg-[#15161c] border border-zinc-800 rounded-2xl w-full max-w-sm p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center space-x-3 text-rose-400">
+        <div class="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-lg">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+        </div>
+        <div>
+          <h4 id="delete-confirm-title" class="text-sm font-bold text-white">Confirmer la suppression</h4>
+          <p id="delete-confirm-subtitle" class="text-xs text-zinc-400">Cette action est irréversible.</p>
+        </div>
+      </div>
+      <p id="delete-confirm-text" class="text-xs text-zinc-300 leading-relaxed">
+        Êtes-vous sûr de vouloir supprimer cet élément ?
+      </p>
+      <div class="flex items-center justify-end space-x-2 pt-2">
+        <button type="button" onclick="closeDeleteConfirmModal()" class="px-3.5 py-2 rounded-xl text-xs font-medium text-zinc-400 hover:text-white border border-zinc-800 bg-zinc-900">Annuler</button>
+        <button type="button" id="delete-confirm-btn" class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 shadow-lg shadow-rose-600/30">Supprimer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MODAL DE SYNCHRONISATION & SAUVEGARDE -->
+  <!-- ======================================================== -->
+  <div id="sync-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="bg-[#15161c] border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-2xl w-full max-w-md max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      
+      <div class="px-5 py-4 border-b border-zinc-800 flex items-center justify-between shrink-0">
+        <h3 class="font-bold text-white text-sm flex items-center gap-2">
+          <i class="fa-solid fa-cloud text-brand-400"></i>
+          <span>Synchronisation & Sauvegardes</span>
+        </h3>
+        <button onclick="closeSyncModal()" class="text-zinc-400 hover:text-white p-1">
+          <i class="fa-solid fa-xmark text-base"></i>
+        </button>
+      </div>
+
+      <div class="p-5 space-y-5 overflow-y-auto no-scrollbar flex-1 text-xs">
+        
+        <!-- Identifiant Cloud -->
+        <div class="space-y-2 bg-[#0d0e12] p-3.5 rounded-xl border border-zinc-800">
+          <label class="font-semibold text-zinc-300 uppercase tracking-wider text-[10px]">Identifiant de Synchronisation Cloud</label>
+          <div class="flex items-center space-x-2">
+            <input type="text" id="sync-user-id-field" readonly value="Synchronisation en cours..." class="w-full bg-[#15161c] border border-zinc-800 rounded-lg px-3 py-2 text-zinc-400 font-mono text-[11px] select-all">
+            <button onclick="copySyncId()" class="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg font-bold shrink-0 transition" title="Copier l'identifiant">
+              <i class="fa-regular fa-copy"></i>
+            </button>
+          </div>
+          <p class="text-[11px] text-zinc-500">Toutes vos notes s'enregistrent automatiquement dans le cloud pour cet identifiant.</p>
+        </div>
+
+        <!-- Export / Import Local -->
+        <div class="space-y-3">
+          <label class="font-semibold text-zinc-400 uppercase tracking-wider text-[10px]">Sauvegardes manuelles (Fichier JSON)</label>
+          
+          <div class="grid grid-cols-2 gap-2">
+            <button onclick="exportDataToFile()" class="tap-target p-3 bg-zinc-900 border border-zinc-800 rounded-xl hover:border-zinc-700 flex flex-col items-center justify-center space-y-1 transition text-zinc-200">
+              <i class="fa-solid fa-download text-brand-400 text-sm"></i>
+              <span class="font-semibold text-[11px]">Exporter (.json)</span>
+            </button>
+            
+            <label class="tap-target p-3 bg-zinc-900 border border-zinc-800 rounded-xl hover:border-zinc-700 flex flex-col items-center justify-center space-y-1 transition text-zinc-200 cursor-pointer">
+              <i class="fa-solid fa-upload text-indigo-400 text-sm"></i>
+              <span class="font-semibold text-[11px]">Importer (.json)</span>
+              <input type="file" accept=".json" onchange="importDataFromFile(event)" class="hidden">
+            </label>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="p-3 border-t border-zinc-800 bg-[#121318] flex justify-end shrink-0">
+        <button onclick="closeSyncModal()" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white font-semibold rounded-xl text-xs">Fermer</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Notification Toast Compacte -->
+  <div id="toast-msg" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 bg-zinc-900/95 border border-zinc-700 text-white px-4 py-2.5 rounded-full shadow-2xl flex items-center space-x-2 text-xs font-semibold transition-all duration-300 transform -translate-y-16 opacity-0 pointer-events-none backdrop-blur-md">
+    <span id="toast-icon" class="text-brand-400"></span>
+    <span id="toast-text">Notification</span>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- JAVASCRIPT & LOGIQUE ÉPURÉE -->
+  <!-- ========================================== -->
+  <script>
+    let currentTab = 'dashboard';
+    let currentSourceType = 'book';
+    let reviewMode = 'flashcard';
+    let currentCardFlipped = false;
+    let reviewQueue = [];
+    let currentReviewIndex = 0;
+    let editingNoteId = null;
+    let isMobileSimulator = false;
+    let activeFilterType = 'all';
+    let activeFilterTaxonomy = 'all'; // Peut être une catégorie ou une sous-catégorie
+    // Persistance locale avec sauvegarde par défaut
+    const DEFAULT_TAXONOMY = {
+      "Histoire": ["2nde Guerre mondiale", "Antiquité Romaine", "Guerre Froide"],
+      "Lectures": ["Philosophie Stoïcienne", "Psychologie & Habitudes", "Économie"],
+      "IA & Concepts": ["Concepts Clés", "Économie & Pensée", "Neurosciences & Esprit", "Intelligence Artificielle"],
+      "Sciences & Tech": ["Informatique", "Physique & Univers"],
+      "Culture Générale": ["Cinéma", "Géopolitique"]
+    };
+
+    const DEFAULT_NOTES = [
+      {
+        id: "note-1",
+        type: "youtube",
+        title: "La Blitzkrieg expliquée",
+        reference: "Nota Bene (YouTube)",
+        category: "Histoire",
+        subcategory: "2nde Guerre mondiale",
+        fullNotes: "🎯 EN BREF :\nLes chars allemands n'étaient pas plus nombreux en 1940. L'atout décisif était la radio intégrée dans chaque blindé et la concentration motrice au point faible.\n\n⚙️ POINTS CLÉS :\n• Chaque char possédait un émetteur-récepteur radio pour ajuster le tir et les trajectoires en direct.\n• Concentration de masse (Schwerpunkt) plutôt que dispersion sur la ligne de front.\n\n💡 EXEMPLE CONCRET DU QUOTIDIEN :\nC'est comme une équipe qui communique en temps réel par oreillette face à des adversaires qui s'envoient des courriers postaux pour décider d'une action.\n\n⚠️ LA NUANCE :\nLa défaite alliée n'était pas un retard technologique sur les blindés, mais une doctrine de commandement trop rigide.",
+        punchline: "La force de la Blitzkrieg n'était pas le nombre de blindés, mais la concentration radio-guidée au point faible pour paralyser le commandement.",
+        question: "Pourquoi l'armée alliée a-t-elle été surprise par la Blitzkrieg malgré un nombre égal de blindés ?",
+        questions: [
+          "Pourquoi l'armée alliée a-t-elle été surprise par la Blitzkrieg malgré un nombre égal de blindés ?",
+          "Quel rôle clé jouait la radio embarquée dans chaque char ?",
+          "Quel exemple concret résume la différence de doctrine de commandement ?"
+        ],
+        quizOptions: [
+          "Les chars alliés manquaient de radios et étaient dispersés sur le front",
+          "Les Allemands avaient trois fois plus de chars lourds",
+          "L'aviation alliée refusait de voler"
+        ],
+        quizCorrectIndex: 0,
+        dueInDays: 0
+      },
+      {
+        id: "note-2",
+        type: "book",
+        title: "Atomic Habits",
+        reference: "James Clear",
+        category: "Lectures",
+        subcategory: "Psychologie & Habitudes",
+        fullNotes: "🎯 EN BREF :\nPour ancrer une habitude durable, il faut faire évoluer son identité profonde plutôt que de fixer des objectifs chiffrés ponctuels.\n\n⚙️ COMMENT ÇA FONCTIONNE :\n• Rendre le déclencheur évident dans son environnement.\n• Rendre l'action tellement facile qu'il est impossible de procrastiner.\n\n💡 EXEMPLE CONCRET DU QUOTIDIEN :\nAu lieu de dire 'je veux lire 30 livres cette année', se dire 'je suis le genre de personne qui lit une page avant d'éteindre la lumière chaque soir'.\n\n⚠️ LE PIÈGE :\nCompter sur la seule motivation du matin, qui finit toujours par s'épuiser.",
+        punchline: "Tu ne t'élèves pas au niveau de tes objectifs, tu retombes au niveau de tes systèmes.",
+        question: "Pourquoi les résolutions chiffrées échouent-elles souvent selon James Clear ?",
+        questions: [
+          "Pourquoi les résolutions chiffrées échouent-elles souvent selon James Clear ?",
+          "Que signifie l'affirmation 'retomber au niveau de ses systèmes' ?",
+          "Quel exemple montre le passage de l'objectif à l'identité ?"
+        ],
+        quizOptions: [
+          "On vise le résultat final au lieu de concevoir un système quotidien",
+          "On manque de volonté naturelle",
+          "On lit trop lentement"
+        ],
+        quizCorrectIndex: 0,
+        dueInDays: 0
+      },
+      {
+        id: "note-3",
+        type: "book",
+        title: "Pensées pour moi-même",
+        reference: "Marc Aurèle",
+        category: "Lectures",
+        subcategory: "Philosophie Stoïcienne",
+        fullNotes: "🎯 EN BREF :\nDichotomie du contrôle : nos jugements, désirs et actions dépendent de nous. Les événements extérieurs, la météo et l'avis d'autrui n'en dépendent pas.\n\n⚙️ COMMENT ÇA FONCTIONNE :\n• Avant de réagir, se poser la question : 'Cela dépend-il de moi ?'.\n• Si non : y accorder une attention neutre et sans colère.\n\n💡 EXEMPLE CONCRET DU QUOTIDIEN :\nQuand ton train a 30 minutes de retard, tu ne peux pas faire rouler la rame plus vite. Tu peux en revanche choisir de lire une note sur Synapse plutôt que de t'énerver.\n\n⚠️ LA NUANCE :\nLe stoïcisme n'est pas de l'indifférence insensible, mais la maîtrise de son énergie mentale.",
+        punchline: "La paix de l'esprit s'obtient quand on refuse de dépenser de l'énergie pour ce qu'on ne peut pas contrôler.",
+        question: "Quel est le principe central de la dichotomie du contrôle ?",
+        questions: [
+          "Quel est le principe central de la dichotomie du contrôle ?",
+          "Que classe le stoïcisme dans ce qui ne dépend pas de nous ?",
+          "Quel exemple du quotidien illustre la bonne réaction face à un retard ?"
+        ],
+        quizOptions: [
+          "Distinguer strictement ce qui dépend de notre action de ce qui est hors de portée",
+          "Vouloir contrôler toutes les réactions de son entourage",
+          "Ne jamais rien ressentir"
+        ],
+        quizCorrectIndex: 0,
+        dueInDays: 0
+      }
+    ];
+
+    let taxonomy = JSON.parse(localStorage.getItem('synapse_taxonomy')) || DEFAULT_TAXONOMY;
+    let notes = JSON.parse(localStorage.getItem('synapse_notes')) || DEFAULT_NOTES;
+
+    function saveStateToStorage() {
+      try {
+        localStorage.setItem('synapse_taxonomy', JSON.stringify(taxonomy));
+        localStorage.setItem('synapse_notes', JSON.stringify(notes));
+      } catch (e) {
+        console.warn("Stockage local indisponible", e);
+      }
+
+      // Synchronisation Cloud automatique en arrière-plan
+      if (window.cloudSave) {
+        window.cloudSave(notes, taxonomy).then(success => {
+          if (success) {
+            updateCloudIndicator(true);
+          }
+        });
+      }
+    }
+
+    function updateCloudIndicator(isOnline) {
+      const dot = document.getElementById('cloud-status-dot');
+      const label = document.getElementById('cloud-status-label');
+      if (dot && label) {
+        if (isOnline) {
+          dot.className = "w-1.5 h-1.5 rounded-full bg-emerald-400";
+          label.innerText = "Cloud synchronisé";
+        } else {
+          dot.className = "w-1.5 h-1.5 rounded-full bg-amber-400";
+          label.innerText = "Local";
+        }
+      }
+    }
+
+    // Écoute de l'authentification et activation du Cloud
+    document.addEventListener('cloud-ready', (e) => {
+      const uid = e.detail?.uid;
+      const uidField = document.getElementById('sync-user-id-field');
+      if (uidField && uid) {
+        uidField.value = uid;
+      }
+      updateCloudIndicator(true);
+
+      // Écouter les mises à jour cloud en temps réel provenant des autres appareils
+      if (window.cloudListen) {
+        window.cloudListen((cloudData) => {
+          if (cloudData && cloudData.notes && cloudData.taxonomy) {
+            notes = cloudData.notes;
+            taxonomy = cloudData.taxonomy;
+            localStorage.setItem('synapse_taxonomy', JSON.stringify(taxonomy));
+            localStorage.setItem('synapse_notes', JSON.stringify(notes));
+            initCategoriesUI();
+            renderDashboard();
+            renderNotesList();
+          }
+        });
+      }
+    });
+
+    window.onload = function() {
+      initCategoriesUI();
+      renderTaxonomyFilters();
+      renderDashboard();
+      renderNotesList();
+      updateDueBadges();
+    };
+
+    function copySyncId() {
+      const field = document.getElementById('sync-user-id-field');
+      if (!field || !field.value) return;
+      field.select();
+      try {
+        document.execCommand('copy');
+        showToast("Identifiant copié !");
+      } catch (err) {
+        showToast("Impossible de copier.");
+      }
+    }
+
+    function startRandomEcho() {
+      if (notes.length === 0) return;
+      const randomNote = notes[Math.floor(Math.random() * notes.length)];
+      reviewSingleNote(randomNote.id);
+      showToast("Écho du passé : fiche sélectionnée au hasard ✨");
+    }
+
+    function rerollDailyPunchline() {
+      if (notes.length === 0) return;
+      const randomNote = notes[Math.floor(Math.random() * notes.length)];
+      document.getElementById('daily-punchline-text').innerText = `« ${randomNote.punchline} »`;
+      document.getElementById('daily-punchline-source').innerHTML = `${getSourceIcon(randomNote.type)} ${randomNote.reference || randomNote.title}`;
+      document.getElementById('daily-punchline-category').innerText = randomNote.category;
+    }
+
+    function copyCardPunchline(e) {
+      if (e) e.stopPropagation();
+      const text = document.getElementById('card-answer-punchline')?.innerText || '';
+      if (!text) return;
+
+      const tempInput = document.createElement('textarea');
+      tempInput.value = text;
+      document.body.appendChild(tempInput);
+      tempInput.select();
+      try {
+        document.execCommand('copy');
+        showToast("Punchline copiée !");
+      } catch (err) {
+        showToast("Impossible de copier.");
+      }
+      document.body.removeChild(tempInput);
+    }
+
+    function switchTab(tabId) {
+      currentTab = tabId;
+      
+      document.getElementById('view-dashboard').classList.toggle('hidden', tabId !== 'dashboard');
+      document.getElementById('view-review').classList.toggle('hidden', tabId !== 'review');
+      document.getElementById('view-notes').classList.toggle('hidden', tabId !== 'notes');
+
+      updateNavButtonState('nav-dashboard', tabId === 'dashboard');
+      updateNavButtonState('nav-review', tabId === 'review');
+      updateNavButtonState('nav-notes', tabId === 'notes');
+
+      const mDash = document.getElementById('mobile-nav-dashboard');
+      const mRev = document.getElementById('mobile-nav-review');
+      const mNot = document.getElementById('mobile-nav-notes');
+
+      if (mDash && mRev && mNot) {
+        mDash.className = tabId === 'dashboard' ? 'tap-target flex flex-col items-center justify-center w-14 text-brand-400' : 'tap-target flex flex-col items-center justify-center w-14 text-zinc-400';
+        mRev.className = tabId === 'review' ? 'tap-target relative flex flex-col items-center justify-center w-14 text-brand-400' : 'tap-target relative flex flex-col items-center justify-center w-14 text-zinc-400';
+        mNot.className = tabId === 'notes' ? 'tap-target flex flex-col items-center justify-center w-14 text-brand-400' : 'tap-target flex flex-col items-center justify-center w-14 text-zinc-400';
+      }
+
+      const hTitle = document.getElementById('header-title');
+      const hSub = document.getElementById('header-subtitle');
+      if (tabId === 'dashboard') {
+        hTitle.innerText = "Aujourd'hui";
+        hSub.innerText = "Prends 5 minutes pour ancrer tes lectures";
+        renderDashboard();
+      } else if (tabId === 'review') {
+        hTitle.innerText = "Session 5 min";
+        hSub.innerText = "Mémorisation active";
+        if (reviewQueue.length === 0) startExpressSession();
+      } else {
+        hTitle.innerText = "Bibliothèque";
+        hSub.innerText = "Toutes tes fiches & résumés";
+        renderNotesList();
+      }
+    }
+
+    function updateNavButtonState(btnId, isActive) {
+      const btn = document.getElementById(btnId);
+      if (!btn) return;
+      btn.className = isActive 
+        ? "w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl font-medium text-sm transition text-white bg-zinc-800/80"
+        : "w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl font-medium text-sm transition text-zinc-400 hover:text-white hover:bg-zinc-800/40";
+    }
+
+    // DASHBOARD
+    function renderDashboard() {
+      if (notes.length > 0) {
+        const randomNote = notes[Math.floor(Math.random() * notes.length)];
+        document.getElementById('daily-punchline-text').innerText = `« ${randomNote.punchline} »`;
+        document.getElementById('daily-punchline-source').innerHTML = `${getSourceIcon(randomNote.type)} ${randomNote.reference || randomNote.title}`;
+        document.getElementById('daily-punchline-category').innerText = randomNote.category;
+      }
+
+      document.getElementById('stat-total-notes').innerText = `${notes.length} fiches`;
+
+      // Horizontal pills
+      const pillsContainer = document.getElementById('category-pills-row');
+      pillsContainer.innerHTML = '';
+      
+      const allPill = document.createElement('button');
+      allPill.className = "px-3.5 py-1.5 rounded-full text-xs font-semibold bg-brand-600 text-white shrink-0";
+      allPill.innerText = "Toutes";
+      allPill.onclick = () => { switchTab('notes'); };
+      pillsContainer.appendChild(allPill);
+
+      Object.keys(taxonomy).forEach(cat => {
+        const count = notes.filter(n => n.category === cat).length;
+        const pill = document.createElement('button');
+        pill.className = "px-3 py-1.5 rounded-full text-xs font-medium bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white shrink-0 flex items-center space-x-1.5";
+        pill.innerHTML = `<span>${cat}</span><span class="text-[10px] text-zinc-400 bg-zinc-800 px-1.5 py-0.2 rounded-full">${count}</span>`;
+        pill.onclick = () => {
+          document.getElementById('notes-search-input').value = cat;
+          switchTab('notes');
+        };
+        pillsContainer.appendChild(pill);
+      });
+
+      // Dernières notes compactes
+      const recentList = document.getElementById('dashboard-recent-notes');
+      recentList.innerHTML = '';
+      notes.slice(0, 3).forEach(note => {
+        const item = document.createElement('div');
+        item.className = "bg-[#14151b] border border-zinc-800/60 rounded-xl p-3.5 flex flex-col space-y-2 cursor-pointer hover:border-zinc-700 transition";
+        item.onclick = () => reviewSingleNote(note.id);
+        item.innerHTML = `
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-semibold text-zinc-200 truncate flex items-center space-x-1.5">
+              ${getSourceIcon(note.type)}
+              <span class="truncate max-w-[200px]">${note.title}</span>
+            </span>
+            <span class="text-[11px] text-zinc-400">${note.category}</span>
+          </div>
+          <p class="text-xs text-zinc-400 italic line-clamp-1">« ${note.punchline} »</p>
+        `;
+        recentList.appendChild(item);
+      });
+
+      updateDueBadges();
+    }
+
+    // RÉVISION 5 MIN
+    function startExpressSession(limit = 5) {
+      const shuffled = [...notes].sort(() => 0.5 - Math.random()).slice(0, limit);
+      reviewQueue = shuffled.map(n => {
+        const qList = (n.questions && n.questions.length > 0) ? n.questions : [n.question];
+        return {
+          ...n,
+          activeQuestion: qList[Math.floor(Math.random() * qList.length)]
+        };
+      });
+
+      currentReviewIndex = 0;
+      currentCardFlipped = false;
+      switchTab('review');
+      renderCurrentCard();
+    }
+
+    function setReviewMode(mode) {
+      reviewMode = mode;
+      document.getElementById('btn-mode-flashcard').className = mode === 'flashcard' 
+        ? "px-2.5 py-1 rounded-md text-[11px] font-semibold bg-brand-600 text-white" 
+        : "px-2.5 py-1 rounded-md text-[11px] font-semibold text-zinc-400";
+
+      document.getElementById('btn-mode-quiz').className = mode === 'quiz' 
+        ? "px-2.5 py-1 rounded-md text-[11px] font-semibold bg-brand-600 text-white" 
+        : "px-2.5 py-1 rounded-md text-[11px] font-semibold text-zinc-400";
+
+      document.getElementById('review-flashcard-box').classList.toggle('hidden', mode !== 'flashcard');
+      document.getElementById('flashcard-actions').classList.toggle('hidden', mode !== 'flashcard');
+      document.getElementById('review-quiz-box').classList.toggle('hidden', mode !== 'quiz');
+      document.getElementById('quiz-actions').classList.toggle('hidden', mode !== 'quiz');
+
+      renderCurrentCard();
+    }
+
+    function renderCurrentCard() {
+      if (reviewQueue.length === 0) {
+        showToast("Session terminée ! Bravo 🎉");
+        switchTab('dashboard');
+        return;
+      }
+
+      const note = reviewQueue[currentReviewIndex];
+      const total = reviewQueue.length;
+      
+      document.getElementById('review-progress-text').innerText = `${currentReviewIndex + 1} / ${total}`;
+      const pct = ((currentReviewIndex + 1) / total) * 100;
+      document.getElementById('review-progress-bar').style.width = `${pct}%`;
+
+      currentCardFlipped = false;
+      document.getElementById('flashcard-inner').classList.remove('rotate-y-180');
+
+      const displayedQuestion = note.activeQuestion || note.question || `Idée clé de : ${note.title}`;
+      document.getElementById('card-hierarchy').innerText = `${note.category} > ${note.subcategory}`;
+      document.getElementById('card-source-tag').innerHTML = `${getSourceIcon(note.type)} ${note.reference || note.title}`;
+      document.getElementById('card-question-text').innerText = displayedQuestion;
+      document.getElementById('card-answer-punchline').innerText = `« ${note.punchline} »`;
+      document.getElementById('card-fullnote-preview').innerHTML = note.fullNotes ? note.fullNotes.replace(/\n/g, '<br>') : "Aucune note additionnelle.";
+
+      // Quizz
+      document.getElementById('quiz-source-tag').innerHTML = `${getSourceIcon(note.type)} ${note.title}`;
+      document.getElementById('quiz-question-text').innerText = displayedQuestion;
+      const optContainer = document.getElementById('quiz-options-container');
+      optContainer.innerHTML = '';
+      document.getElementById('quiz-explanation-box').classList.add('hidden');
+      document.getElementById('quiz-next-btn').disabled = true;
+
+      const options = note.quizOptions || [
+        note.punchline,
+        "Ce concept est purement théorique et inopérant",
+        "L'exact inverse de ce principe"
+      ];
+      const correctIdx = note.quizCorrectIndex !== undefined ? note.quizCorrectIndex : 0;
+
+      options.forEach((optText, idx) => {
+        const btn = document.createElement('button');
+        btn.className = "tap-target w-full text-left p-3 rounded-xl bg-[#0d0e12] border border-zinc-800 text-xs text-zinc-200 transition font-medium flex items-center justify-between";
+        btn.innerHTML = `<span>${optText}</span><i class="fa-regular fa-circle text-zinc-500"></i>`;
+        btn.onclick = () => handleQuizSelect(idx, correctIdx, btn, note.punchline);
+        optContainer.appendChild(btn);
+      });
+    }
+
+    function flipFlashcard() {
+      currentCardFlipped = !currentCardFlipped;
+      document.getElementById('flashcard-inner').classList.toggle('rotate-y-180', currentCardFlipped);
+    }
+
+    function handleCardAnswer(quality) {
+      nextCard();
+    }
+
+    function handleQuizSelect(selectedIndex, correctIndex, buttonEl, punchline) {
+      const optContainer = document.getElementById('quiz-options-container');
+      const buttons = optContainer.querySelectorAll('button');
+      buttons.forEach(b => b.onclick = null);
+
+      if (selectedIndex === correctIndex) {
+        buttonEl.className = "tap-target w-full text-left p-3 rounded-xl bg-emerald-950/40 border border-emerald-500 text-xs text-white font-medium flex items-center justify-between";
+        buttonEl.innerHTML = `<span>${buttonEl.innerText}</span><i class="fa-solid fa-check text-emerald-400"></i>`;
+        showToast("Exact !", "success");
+      } else {
+        buttonEl.className = "tap-target w-full text-left p-3 rounded-xl bg-rose-950/40 border border-rose-500 text-xs text-white font-medium flex items-center justify-between";
+        buttonEl.innerHTML = `<span>${buttonEl.innerText}</span><i class="fa-solid fa-xmark text-rose-400"></i>`;
+        const correctBtn = buttons[correctIndex];
+        if (correctBtn) correctBtn.classList.add('border-emerald-500', 'text-emerald-300');
+      }
+
+      const expBox = document.getElementById('quiz-explanation-box');
+      document.getElementById('quiz-explanation-text').innerText = `« ${punchline} »`;
+      expBox.classList.remove('hidden');
+      document.getElementById('quiz-next-btn').disabled = false;
+    }
+
+    function nextCard() {
+      if (currentReviewIndex < reviewQueue.length - 1) {
+        currentReviewIndex++;
+        renderCurrentCard();
+      } else {
+        showToast("Session 5 min terminée avec succès ! 🎉");
+        setTimeout(() => switchTab('dashboard'), 800);
+      }
+    }
+
+    // BIBLIOTHÈQUE & RECHERCHE
+    function filterByType(type) {
+      activeFilterType = type;
+      ['all', 'book', 'youtube', 'ai', 'other'].forEach(t => {
+        const btn = document.getElementById(`filter-type-${t}`);
+        if (!btn) return;
+        if (t === type) {
+          btn.className = "filter-chip px-3 py-1.5 rounded-lg text-xs font-medium bg-brand-600 text-white whitespace-nowrap";
+        } else {
+          btn.className = "filter-chip px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-white whitespace-nowrap";
+        }
+      });
+      renderNotesList();
+    }
+
+    function filterByTaxonomy(val) {
+      activeFilterTaxonomy = val;
+      renderTaxonomyFilters();
+      renderNotesList();
+    }
+
+    function renderTaxonomyFilters() {
+      const container = document.getElementById('taxonomy-filter-pills');
+      if (!container) return;
+      container.innerHTML = '';
+
+      // Calcul dynamique des catégories et sous-catégories réellement utilisées dans les fiches
+      const usedCategories = {};
+      const usedSubcategories = {};
+
+      notes.forEach(n => {
+        if (n.category) {
+          usedCategories[n.category] = (usedCategories[n.category] || 0) + 1;
+        }
+        if (n.subcategory) {
+          usedSubcategories[n.subcategory] = {
+            count: (usedSubcategories[n.subcategory]?.count || 0) + 1,
+            parentCat: n.category
+          };
+        }
+      });
+
+      // Bouton "Toutes"
+      const allBtn = document.createElement('button');
+      allBtn.className = activeFilterTaxonomy === 'all'
+        ? "px-2.5 py-1 rounded-md text-[11px] font-semibold bg-zinc-700 text-white whitespace-nowrap"
+        : "px-2.5 py-1 rounded-md text-[11px] font-medium bg-zinc-900 text-zinc-400 hover:text-white whitespace-nowrap border border-zinc-800";
+      allBtn.innerHTML = `Toutes <span class="text-[10px] opacity-70">(${notes.length})</span>`;
+      allBtn.onclick = () => filterByTaxonomy('all');
+      container.appendChild(allBtn);
+
+      // 1. Afficher les Catégories qui possèdent réellement des fiches
+      Object.keys(usedCategories).forEach(cat => {
+        const catBtn = document.createElement('button');
+        const isCatActive = activeFilterTaxonomy === cat;
+        catBtn.className = isCatActive
+          ? "px-2.5 py-1 rounded-md text-[11px] font-semibold bg-brand-600 text-white whitespace-nowrap shadow-sm"
+          : "px-2.5 py-1 rounded-md text-[11px] font-medium bg-zinc-900 text-zinc-300 hover:text-white whitespace-nowrap border border-zinc-800";
+        catBtn.innerHTML = `<span class="text-brand-400">#</span> ${cat} <span class="text-[10px] opacity-70">(${usedCategories[cat]})</span>`;
+        catBtn.onclick = () => filterByTaxonomy(cat);
+        container.appendChild(catBtn);
+      });
+
+      // 2. Afficher les Sous-Catégories existantes (si une catégorie parent est active, afficher uniquement les siennes)
+      Object.keys(usedSubcategories).forEach(sub => {
+        const subData = usedSubcategories[sub];
+        
+        // Si l'utilisateur a filtré sur une catégorie, on n'affiche que ses sous-catégories
+        if (activeFilterTaxonomy !== 'all' && usedCategories[activeFilterTaxonomy] && subData.parentCat !== activeFilterTaxonomy) {
+          return;
+        }
+
+        const subBtn = document.createElement('button');
+        const isSubActive = activeFilterTaxonomy === sub;
+        subBtn.className = isSubActive
+          ? "px-2 py-1 rounded-md text-[10px] font-semibold bg-indigo-600 text-white whitespace-nowrap"
+          : "px-2 py-1 rounded-md text-[10px] font-medium bg-zinc-900/60 text-zinc-400 hover:text-zinc-200 whitespace-nowrap border border-zinc-800/80";
+        subBtn.innerHTML = `${sub} <span class="text-[9px] opacity-70">(${subData.count})</span>`;
+        subBtn.onclick = () => filterByTaxonomy(sub);
+        container.appendChild(subBtn);
+      });
+    }
+
+    function renderNotesList() {
+      const container = document.getElementById('notes-cards-container');
+      container.innerHTML = '';
+
+      const query = (document.getElementById('notes-search-input')?.value || '').toLowerCase();
+
+      const filtered = notes.filter(n => {
+        const matchesQuery = n.title.toLowerCase().includes(query) ||
+                             n.punchline.toLowerCase().includes(query) ||
+                             n.category.toLowerCase().includes(query) ||
+                             (n.subcategory && n.subcategory.toLowerCase().includes(query));
+        const matchesType = activeFilterType === 'all' || n.type === activeFilterType;
+        const matchesTaxonomy = activeFilterTaxonomy === 'all' ||
+                                n.category === activeFilterTaxonomy ||
+                                n.subcategory === activeFilterTaxonomy;
+        return matchesQuery && matchesType && matchesTaxonomy;
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="py-12 text-center text-zinc-400 space-y-2">
+            <p class="text-xs">Aucune note trouvée avec ces filtres.</p>
+          </div>
+        `;
+        return;
+      }
+
+      filtered.forEach(note => {
+        const card = document.createElement('div');
+        card.className = "bg-[#14151b] border border-zinc-800/80 rounded-xl p-4 space-y-2.5 transition";
+        card.innerHTML = `
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-semibold text-white flex items-center space-x-1.5">
+              ${getSourceIcon(note.type)}
+              <span>${note.title}</span>
+            </span>
+            <span class="text-[11px] text-zinc-400">${note.category}</span>
+          </div>
+
+          <p class="text-xs text-amber-200/90 italic font-medium leading-relaxed">« ${note.punchline} »</p>
+
+          <div class="pt-2 border-t border-zinc-800/60 flex items-center justify-between text-xs text-zinc-400">
+            <span class="text-[11px] text-zinc-400 truncate max-w-[150px]">${note.reference || note.subcategory}</span>
+            <div class="flex items-center space-x-3">
+              <button onclick="reviewSingleNote('${note.id}')" class="text-amber-400 font-semibold hover:underline">Réviser</button>
+              <button onclick="editNote('${note.id}')" class="hover:text-white" title="Modifier"><i class="fa-solid fa-pen text-[10px]"></i></button>
+              <button onclick="requestDeleteNote('${note.id}')" class="hover:text-rose-400" title="Supprimer la fiche"><i class="fa-solid fa-trash-can text-[10px]"></i></button>
+            </div>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function reviewSingleNote(id) {
+      const found = notes.find(n => n.id === id);
+      if (found) {
+        reviewQueue = [{
+          ...found,
+          activeQuestion: found.question || (found.questions ? found.questions[0] : null)
+        }];
+        currentReviewIndex = 0;
+        currentCardFlipped = false;
+        switchTab('review');
+        renderCurrentCard();
+      }
+    }
+
+    // Modal de confirmation personnalisé
+    let pendingDeleteAction = null;
+
+    function openDeleteConfirmModal(title, text, onConfirm) {
+      document.getElementById('delete-confirm-title').innerText = title;
+      document.getElementById('delete-confirm-text').innerText = text;
+      pendingDeleteAction = onConfirm;
+
+      const confirmBtn = document.getElementById('delete-confirm-btn');
+      confirmBtn.onclick = () => {
+        if (pendingDeleteAction) pendingDeleteAction();
+        closeDeleteConfirmModal();
+      };
+
+      document.getElementById('delete-confirm-modal').classList.remove('hidden');
+    }
+
+    function closeDeleteConfirmModal() {
+      document.getElementById('delete-confirm-modal').classList.add('hidden');
+      pendingDeleteAction = null;
+    }
+
+    function requestDeleteNote(id) {
+      const target = notes.find(n => n.id === id);
+      const title = target ? `« ${target.title} »` : "cette fiche";
+      openDeleteConfirmModal(
+        "Supprimer la fiche",
+        `Voulez-vous vraiment supprimer définitivement la fiche ${title} ?`,
+        () => performDeleteNote(id)
+      );
+    }
+
+    function triggerDeleteFromModal() {
+      if (!editingNoteId) return;
+      const targetId = editingNoteId;
+      requestDeleteNote(targetId);
+    }
+
+    function performDeleteNote(id) {
+      notes = notes.filter(n => n.id !== id);
+      saveStateToStorage();
+      closeNoteModal();
+      showToast("Fiche supprimée avec succès !");
+      renderNotesList();
+      renderTaxonomyFilters();
+      renderDashboard();
+    }
+
+    // MODAL & ASSISTANT IA
+    function openNoteModal(editId = null) {
+      editingNoteId = editId;
+      initCategoriesUI();
+
+      const deleteBtn = document.getElementById('btn-delete-current-note');
+
+      if (editId) {
+        const note = notes.find(n => n.id === editId);
+        if (note) {
+          document.getElementById('modal-title').innerText = "Modifier la Fiche";
+          if (deleteBtn) deleteBtn.classList.remove('hidden');
+          selectSourceType(note.type);
+          document.getElementById('input-title').value = note.title;
+          document.getElementById('input-reference').value = note.reference || "";
+          document.getElementById('select-category').value = note.category;
+          updateSubcategoriesSelect();
+          document.getElementById('select-subcategory').value = note.subcategory;
+          document.getElementById('input-fullnotes').value = note.fullNotes || "";
+          document.getElementById('input-punchline').value = note.punchline || "";
+          renderQuestionFields(note.questions || [note.question || ""]);
+        }
+      } else {
+        document.getElementById('modal-title').innerText = "Nouvelle Fiche";
+        if (deleteBtn) deleteBtn.classList.add('hidden');
+        selectSourceType('book');
+        document.getElementById('input-title').value = "";
+        document.getElementById('input-reference').value = "";
+        document.getElementById('input-fullnotes').value = "";
+        document.getElementById('input-punchline').value = "";
+        renderQuestionFields([""]);
+      }
+
+      document.getElementById('note-modal').classList.remove('hidden');
+    }
+
+    function closeNoteModal() {
+      document.getElementById('note-modal').classList.add('hidden');
+      editingNoteId = null;
+    }
+
+    function renderQuestionFields(questionsArray) {
+      const container = document.getElementById('questions-inputs-container');
+      container.innerHTML = '';
+      questionsArray.forEach((q, idx) => {
+        const wrap = document.createElement('div');
+        wrap.className = "flex items-center space-x-2";
+        wrap.innerHTML = `
+          <input type="text" value="${q.replace(/"/g, '&quot;')}" class="question-input-item tap-target w-full bg-[#0d0e12] border border-zinc-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-brand-500" placeholder="Question ${idx + 1}...">
+          ${questionsArray.length > 1 ? `<button type="button" onclick="this.parentElement.remove()" class="text-zinc-500 hover:text-rose-400 p-2"><i class="fa-solid fa-trash-can text-xs"></i></button>` : ''}
+        `;
+        container.appendChild(wrap);
+      });
+    }
+
+    function addQuestionField() {
+      const container = document.getElementById('questions-inputs-container');
+      const idx = container.querySelectorAll('.question-input-item').length + 1;
+      const wrap = document.createElement('div');
+      wrap.className = "flex items-center space-x-2";
+      wrap.innerHTML = `
+        <input type="text" class="question-input-item tap-target w-full bg-[#0d0e12] border border-zinc-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-brand-500" placeholder="Question ${idx}...">
+        <button type="button" onclick="this.parentElement.remove()" class="text-zinc-500 hover:text-rose-400 p-2"><i class="fa-solid fa-trash-can text-xs"></i></button>
+      `;
+      container.appendChild(wrap);
+    }
+
+    function getQuestionsFromForm() {
+      const inputs = document.querySelectorAll('.question-input-item');
+      const arr = [];
+      inputs.forEach(inp => {
+        const v = inp.value.trim();
+        if (v) arr.push(v);
+      });
+      return arr;
+    }
+
+    function initCategoriesUI() {
+      const catSelect = document.getElementById('select-category');
+      const desktopList = document.getElementById('desktop-category-list');
+      if (!catSelect) return;
+
+      catSelect.innerHTML = '';
+      Object.keys(taxonomy).forEach(cat => {
+        const opt = document.createElement('option');
+        opt.value = cat;
+        opt.innerText = cat;
+        catSelect.appendChild(opt);
+      });
+
+      if (desktopList) {
+        desktopList.innerHTML = '';
+        Object.keys(taxonomy).forEach(cat => {
+          const btn = document.createElement('button');
+          btn.className = "w-full text-left px-2 py-1.5 rounded-lg hover:bg-zinc-800 hover:text-white flex items-center justify-between text-xs";
+          const count = notes.filter(n => n.category === cat).length;
+          btn.innerHTML = `<span>${cat}</span><span class="text-[10px] text-zinc-400">${count}</span>`;
+          btn.onclick = () => {
+            document.getElementById('notes-search-input').value = cat;
+            switchTab('notes');
+          };
+          desktopList.appendChild(btn);
+        });
+      }
+
+      updateSubcategoriesSelect();
+    }
+
+    function updateSubcategoriesSelect() {
+      const catSelect = document.getElementById('select-category');
+      const subSelect = document.getElementById('select-subcategory');
+      if (!catSelect || !subSelect) return;
+
+      const selectedCat = catSelect.value;
+      const subcategories = taxonomy[selectedCat] || [];
+      subSelect.innerHTML = '';
+      subcategories.forEach(sub => {
+        const opt = document.createElement('option');
+        opt.value = sub;
+        opt.innerText = sub;
+        subSelect.appendChild(opt);
+      });
+    }
+
+    function addNewCategoryPrompt() {
+      const name = window.prompt("Nom de la catégorie (ex: Économie) :");
+      if (name && name.trim()) {
+        const clean = name.trim();
+        if (!taxonomy[clean]) {
+          taxonomy[clean] = ["Général"];
+          saveStateToStorage();
+          initCategoriesUI();
+          renderTaxonomyFilters();
+          document.getElementById('select-category').value = clean;
+          updateSubcategoriesSelect();
+          showToast(`Catégorie « ${clean} » créée`);
+        }
+      }
+    }
+
+    function addNewSubcategoryPrompt() {
+      const currentCat = document.getElementById('select-category').value;
+      const name = window.prompt(`Sous-catégorie pour "${currentCat}" :`);
+      if (name && name.trim()) {
+        const clean = name.trim();
+        if (!taxonomy[currentCat]) taxonomy[currentCat] = [];
+        if (!taxonomy[currentCat].includes(clean)) {
+          taxonomy[currentCat].push(clean);
+          saveStateToStorage();
+          updateSubcategoriesSelect();
+          renderTaxonomyFilters();
+          document.getElementById('select-subcategory').value = clean;
+          showToast(`Sous-catégorie « ${clean} » ajoutée`);
+        }
+      }
+    }
+
+    // Gestion via la modale dédiée
+    function openManageTaxonomyModal() {
+      const modal = document.getElementById('taxonomy-modal');
+      const select = document.getElementById('modal-parent-cat-select');
+      const tree = document.getElementById('modal-taxonomy-tree');
+      if (!modal || !select || !tree) return;
+
+      select.innerHTML = '';
+      tree.innerHTML = '';
+
+      Object.keys(taxonomy).forEach(cat => {
+        const opt = document.createElement('option');
+        opt.value = cat;
+        opt.innerText = cat;
+        select.appendChild(opt);
+
+        const group = document.createElement('div');
+        group.className = "p-3 bg-zinc-900/70 rounded-xl border border-zinc-800 space-y-2";
+        const subs = taxonomy[cat] || [];
+        const countInCat = notes.filter(n => n.category === cat).length;
+
+        group.innerHTML = `
+          <div class="font-bold text-zinc-200 text-xs flex items-center justify-between">
+            <span class="flex items-center gap-1.5 text-brand-300">
+              <i class="fa-solid fa-folder text-[11px]"></i>
+              <span># ${cat}</span>
+              <span class="text-[10px] text-zinc-500 font-normal">(${countInCat} fiches)</span>
+            </span>
+            <button onclick="requestDeleteCategory('${cat.replace(/'/g, "\\'")}')" class="text-zinc-500 hover:text-rose-400 p-1 transition" title="Supprimer la catégorie ${cat}">
+              <i class="fa-solid fa-trash-can text-[11px]"></i>
+            </button>
+          </div>
+          <div class="flex flex-wrap gap-1.5 pt-1">
+            ${subs.map(s => `
+              <span class="inline-flex items-center gap-1 px-2.5 py-1 bg-zinc-800 text-zinc-300 rounded-lg text-[10px] border border-zinc-700/60">
+                <span>${s}</span>
+                <button onclick="requestDeleteSubcategory('${cat.replace(/'/g, "\\'")}', '${s.replace(/'/g, "\\'")}')" class="text-zinc-500 hover:text-rose-400 ml-0.5" title="Supprimer le sous-thème ${s}">
+                  <i class="fa-solid fa-xmark text-[9px]"></i>
+                </button>
+              </span>
+            `).join('')}
+          </div>
+        `;
+        tree.appendChild(group);
+      });
+
+      modal.classList.remove('hidden');
+    }
+
+    function requestDeleteCategory(cat) {
+      const associatedNotes = notes.filter(n => n.category === cat);
+      let warningText = `Voulez-vous supprimer la catégorie « ${cat} » ?`;
+      if (associatedNotes.length > 0) {
+        warningText += `\nAttention : ${associatedNotes.length} fiche(s) associée(s) seront reclassées dans "Général".`;
+      }
+
+      openDeleteConfirmModal(
+        `Supprimer "${cat}"`,
+        warningText,
+        () => performDeleteCategory(cat)
+      );
+    }
+
+    function performDeleteCategory(cat) {
+      delete taxonomy[cat];
+      // Réassigner les notes orphelines
+      notes.forEach(n => {
+        if (n.category === cat) {
+          n.category = "Culture Générale";
+          n.subcategory = "Général";
+        }
+      });
+      // S'assurer qu'au moins une catégorie de secours existe
+      if (Object.keys(taxonomy).length === 0) {
+        taxonomy["Culture Générale"] = ["Général"];
+      }
+
+      saveStateToStorage();
+      initCategoriesUI();
+      renderTaxonomyFilters();
+      renderDashboard();
+      renderNotesList();
+      openManageTaxonomyModal();
+      showToast(`Catégorie « ${cat} » supprimée.`);
+    }
+
+    function requestDeleteSubcategory(parentCat, sub) {
+      openDeleteConfirmModal(
+        `Supprimer "${sub}"`,
+        `Voulez-vous retirer le sous-thème « ${sub} » de la catégorie « ${parentCat} » ?`,
+        () => performDeleteSubcategory(parentCat, sub)
+      );
+    }
+
+    function performDeleteSubcategory(parentCat, sub) {
+      if (taxonomy[parentCat]) {
+        taxonomy[parentCat] = taxonomy[parentCat].filter(s => s !== sub);
+        if (taxonomy[parentCat].length === 0) {
+          taxonomy[parentCat] = ["Général"];
+        }
+      }
+      notes.forEach(n => {
+        if (n.category === parentCat && n.subcategory === sub) {
+          n.subcategory = "Général";
+        }
+      });
+
+      saveStateToStorage();
+      updateSubcategoriesSelect();
+      renderTaxonomyFilters();
+      renderDashboard();
+      renderNotesList();
+      openManageTaxonomyModal();
+      showToast(`Sous-thème « ${sub} » supprimé.`);
+    }
+
+    function closeManageTaxonomyModal() {
+      const modal = document.getElementById('taxonomy-modal');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    function handleAddCategoryFromModal() {
+      const input = document.getElementById('new-cat-input');
+      const val = input ? input.value.trim() : '';
+      if (!val) {
+        showToast("Veuillez saisir un nom de catégorie.");
+        return;
+      }
+      if (!taxonomy[val]) {
+        taxonomy[val] = ["Général"];
+        saveStateToStorage();
+        initCategoriesUI();
+        renderTaxonomyFilters();
+        renderDashboard();
+        
+        // Sélectionner automatiquement dans le formulaire de note s'il est ouvert
+        const catSelect = document.getElementById('select-category');
+        if (catSelect) {
+          catSelect.value = val;
+          updateSubcategoriesSelect();
+        }
+
+        input.value = '';
+        openManageTaxonomyModal();
+        showToast(`Catégorie « ${val} » ajoutée avec succès ! ✨`);
+      } else {
+        showToast("Cette catégorie existe déjà.");
+      }
+    }
+
+    function handleAddSubcategoryFromModal() {
+      const select = document.getElementById('modal-parent-cat-select');
+      const input = document.getElementById('new-sub-input');
+      const parent = select ? select.value : null;
+      const val = input ? input.value.trim() : '';
+      if (!parent || !val) {
+        showToast("Veuillez indiquer un sous-thème.");
+        return;
+      }
+
+      if (!taxonomy[parent]) taxonomy[parent] = [];
+      if (!taxonomy[parent].includes(val)) {
+        taxonomy[parent].push(val);
+        saveStateToStorage();
+        updateSubcategoriesSelect();
+        renderTaxonomyFilters();
+        renderDashboard();
+
+        // Sélectionner automatiquement dans le formulaire de note
+        const catSelect = document.getElementById('select-category');
+        const subSelect = document.getElementById('select-subcategory');
+        if (catSelect && subSelect) {
+          catSelect.value = parent;
+          updateSubcategoriesSelect();
+          subSelect.value = val;
+        }
+
+        input.value = '';
+        openManageTaxonomyModal();
+        showToast(`Sous-thématique « ${val} » ajoutée à ${parent} ! ✨`);
+      } else {
+        showToast("Cette sous-thématique existe déjà.");
+      }
+    }
+
+    function selectSourceType(type) {
+      currentSourceType = type;
+      const activeClass = "tap-target flex items-center justify-center space-x-1.5 py-2 rounded-xl border border-brand-500 bg-brand-500/10 text-white font-medium transition text-[11px] sm:text-xs";
+      const inactiveClass = "tap-target flex items-center justify-center space-x-1.5 py-2 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-400 font-medium transition text-[11px] sm:text-xs";
+
+      document.getElementById('src-btn-book').className = type === 'book' ? activeClass : inactiveClass;
+      document.getElementById('src-btn-youtube').className = type === 'youtube' ? activeClass : inactiveClass;
+      const btnAi = document.getElementById('src-btn-ai');
+      if (btnAi) btnAi.className = type === 'ai' ? activeClass : inactiveClass;
+      document.getElementById('src-btn-other').className = type === 'other' ? activeClass : inactiveClass;
+
+      const ytBox = document.getElementById('youtube-url-box');
+      if (ytBox) {
+        ytBox.classList.toggle('hidden', type !== 'youtube');
+      }
+
+      const aiBox = document.getElementById('ai-concept-box');
+      if (aiBox) {
+        aiBox.classList.toggle('hidden', type !== 'ai');
+      }
+
+      const labelTitle = document.getElementById('label-source-title');
+      const labelRef = document.getElementById('label-source-author');
+      if (type === 'book') {
+        labelTitle.innerText = "Titre du livre *";
+        labelRef.innerText = "Auteur";
+      } else if (type === 'youtube') {
+        labelTitle.innerText = "Titre de la vidéo *";
+        labelRef.innerText = "Chaîne ou Lien";
+      } else if (type === 'ai') {
+        labelTitle.innerText = "Sujet / Concept *";
+        labelRef.innerText = "Origine / Courant / Auteur clé";
+        // Pré-sélectionner la catégorie IA si elle existe
+        const catSelect = document.getElementById('select-category');
+        if (catSelect && taxonomy["IA & Concepts"]) {
+          catSelect.value = "IA & Concepts";
+          updateSubcategoriesSelect();
+        }
+      } else {
+        labelTitle.innerText = "Titre de la note *";
+        labelRef.innerText = "Source";
+      }
+    }
+
+    // GÉNÉRATION COMPLÈTE DE FICHE VIA UN MOT-CLÉ / CONCEPT
+    async function generateConceptWithAI() {
+      const topicInput = document.getElementById('input-ai-topic');
+      let topic = topicInput ? topicInput.value.trim() : '';
+      if (!topic) {
+        topic = document.getElementById('input-title')?.value.trim() || '';
+      }
+
+      if (!topic) {
+        showToast("Indique au moins le nom d'un concept (ex: Keynésianisme)");
+        return;
+      }
+
+      const btn = document.getElementById('btn-fetch-ai-concept');
+      const origText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-xs"></i><span>Recherche...</span>`;
+
+      const promptMsg = `Agis comme un pédagogue d'élite. Rédige une fiche d'apprentissage ultra-claire et concrète pour ce concept : "${topic}".
+
+Règles de rédaction impératives pour "cleanNotes" :
+- Ne sois JAMAIS abstrait ou trop haut niveau. Rends le concept immédiatement compréhensible.
+- Sauts de ligne impératifs entre chaque section pour aérer la lecture.
+- Organise EXACTEMENT sous cette structure :
+
+🎯 EN BREF :
+[1 à 2 phrases simples expliquant l'idée centrale sans jargon]
+
+⚙️ COMMENT ÇA FONCTIONNE :
+• [Point 1 : Le mécanisme d'action ou le déclencheur]
+• [Point 2 : Les conséquences directes ou étapes]
+
+💡 EXEMPLE CONCRET DU QUOTIDIEN :
+[Un exemple imagé ou un cas réel tiré de la vie de tous les jours / histoire pour visualiser immédiatement]
+
+⚠️ LA NUANCE / LE PIÈGE :
+[L'erreur courante ou la subtilité à ne pas confondre]
+
+Extrais ou génère en JSON :
+1. "title": Le titre clair et valorisant du concept (ex: "Le Keynésianisme").
+2. "authorOrOrigin": L'auteur, l'initiateur ou l'époque (ex: "John Maynard Keynes (1936)").
+3. "cleanNotes": La note rédigée avec la structure ci-dessus (avec des retours à la ligne bien marqués).
+4. "punchline": 1 phrase percutante et simple qui ancre le concept dans la mémoire.
+5. "suggestedSubcategory": Une sous-catégorie courte (ex: "Économie & Pensée", "Psychologie", "Histoire").
+6. "questions": 3 questions de révision variées (sur le principe de base, l'exemple et la nuance).`;
+
+      try {
+        const apiKey = "";
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+        const payload = {
+          contents: [{ parts: [{ text: promptMsg }] }],
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "OBJECT",
+              properties: {
+                title: { type: "STRING" },
+                authorOrOrigin: { type: "STRING" },
+                cleanNotes: { type: "STRING" },
+                punchline: { type: "STRING" },
+                suggestedSubcategory: { type: "STRING" },
+                questions: { type: "ARRAY", items: { type: "STRING" } }
+              },
+              required: ["title", "authorOrOrigin", "cleanNotes", "punchline", "questions"]
+            }
+          }
+        };
+
+        const res = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (jsonText) {
+          const parsed = JSON.parse(jsonText);
+          if (parsed.title) document.getElementById('input-title').value = parsed.title;
+          if (parsed.authorOrOrigin) document.getElementById('input-reference').value = parsed.authorOrOrigin;
+          if (parsed.cleanNotes) document.getElementById('input-fullnotes').value = parsed.cleanNotes;
+          if (parsed.punchline) document.getElementById('input-punchline').value = parsed.punchline;
+          if (parsed.questions) renderQuestionFields(parsed.questions);
+
+          // Ajuster la catégorie et sous-catégorie si possible
+          if (taxonomy["IA & Concepts"]) {
+            document.getElementById('select-category').value = "IA & Concepts";
+            updateSubcategoriesSelect();
+            if (parsed.suggestedSubcategory && !taxonomy["IA & Concepts"].includes(parsed.suggestedSubcategory)) {
+              taxonomy["IA & Concepts"].push(parsed.suggestedSubcategory);
+              saveStateToStorage();
+              updateSubcategoriesSelect();
+            }
+            if (parsed.suggestedSubcategory) {
+              document.getElementById('select-subcategory').value = parsed.suggestedSubcategory;
+            }
+          }
+
+          showToast(`Fiche générée sur « ${parsed.title || topic} » ✨`);
+        } else {
+          throw new Error("No data");
+        }
+      } catch (e) {
+        // Fallback intelligent structuré et concret avec exemple
+        const formattedFallback = `🎯 EN BREF :
+Le ${topic} propose une grille de lecture simple pour comprendre un phénomène précis.
+
+⚙️ COMMENT ÇA FONCTIONNE :
+• Déclencheur : une situation de départ qui nécessite une réaction.
+• Mécanisme : les choix des acteurs influencent l'issue finale.
+
+💡 EXEMPLE CONCRET DU QUOTIDIEN :
+Imagine une situation courante où chacun attend que l'autre agisse : le ${topic} montre comment coordonner les actions pour débloquer l'ensemble.
+
+⚠️ LA NUANCE / LE PIÈGE :
+Ne pas réduire cette approche à un cas isolé, mais l'envisager comme un système global.`;
+
+        document.getElementById('input-title').value = topic.charAt(0).toUpperCase() + topic.slice(1);
+        document.getElementById('input-reference').value = "Concept théorique";
+        document.getElementById('input-fullnotes').value = formattedFallback;
+        document.getElementById('input-punchline').value = `${topic} : comprendre les rouages fondamentaux pour agir efficacement dans le monde réel.`;
+        renderQuestionFields([
+          `Quel est le principe de base de : ${topic} ?`,
+          `Quel exemple du quotidien illustre bien ${topic} ?`,
+          `Quel piège ou erreur classique faut-il éviter concernant ${topic} ?`
+        ]);
+        showToast("Fiche créée en mode local.");
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = origText;
+      }
+    }
+
+    // FLASH RÉCAP YOUTUBE VIA URL
+    async function flashRecapYouTube() {
+      const urlInput = document.getElementById('input-youtube-url');
+      const url = urlInput ? urlInput.value.trim() : '';
+
+      if (!url) {
+        showToast("Veuillez coller un lien YouTube valide.");
+        return;
+      }
+
+      const btn = document.getElementById('btn-fetch-youtube');
+      const origText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-xs"></i><span>Extraction...</span>`;
+
+      // Détecter l'ID de la vidéo
+      let videoId = null;
+      try {
+        if (url.includes('youtu.be/')) {
+          videoId = url.split('youtu.be/')[1].split('?')[0];
+        } else if (url.includes('watch?v=')) {
+          videoId = new URL(url).searchParams.get('v');
+        }
+      } catch (err) {
+        videoId = null;
+      }
+
+      // 1. Récupération préalable des vraies métadonnées YouTube (Titre exact & Nom de chaîne) via oEmbed officiel
+      let realTitle = "";
+      let realAuthor = "";
+      try {
+        const oembedUrl = `https://noembed.com/embed?url=${encodeURIComponent(url)}`;
+        const oembedRes = await fetch(oembedUrl);
+        if (oembedRes.ok) {
+          const oembedData = await oembedRes.json();
+          if (oembedData && oembedData.title) {
+            realTitle = oembedData.title;
+            realAuthor = oembedData.author_name || "";
+          }
+        }
+      } catch (err) {
+        console.warn("oEmbed indisponible, tentative par analyse directe", err);
+      }
+
+      if (realTitle) {
+        document.getElementById('input-title').value = realTitle;
+        document.getElementById('input-reference').value = realAuthor ? `${realAuthor} (${url})` : url;
+      }
+
+      const contextualizedPrompt = `Analyse cette vidéo YouTube :
+Titre : "${realTitle || 'Vidéo YouTube'}"
+Chaîne / Auteur : "${realAuthor || 'Inconnu'}"
+Lien : "${url}"
+
+Rédige une fiche d'apprentissage ultra-claire, structurée et ancrée dans le réel pour "cleanNotes".
+RÈGLES D'ORGANISATION (sauts de ligne obligatoires) :
+🎯 EN BREF :
+[La thèse centrale de la vidéo formulée simplement]
+
+⚙️ POINTS CLÉS :
+• [Argument majeur 1]
+• [Argument majeur 2]
+
+💡 EXEMPLE OU CAS PRATIQUE MENTIONNÉ :
+[L'exemple, l'expérience ou l'histoire marquante citée dans la vidéo pour illustrer le propos]
+
+⚠️ À RETENIR AU QUOTIDIEN :
+[Comment appliquer concrètement cette idée dans sa vie]
+
+Génère en JSON :
+1. "title": Le titre précis
+2. "channel": La chaîne YouTube
+3. "cleanNotes": La note rédigée avec la structure ci-dessus
+4. "punchline": 1 à 2 phrases percutantes à retenir
+5. "questions": 2 à 3 questions de révision variées`;
+
+      try {
+        const apiKey = "";
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+        const payload = {
+          contents: [{ parts: [{ text: contextualizedPrompt }] }],
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "OBJECT",
+              properties: {
+                title: { type: "STRING" },
+                channel: { type: "STRING" },
+                cleanNotes: { type: "STRING" },
+                punchline: { type: "STRING" },
+                questions: { type: "ARRAY", items: { type: "STRING" } }
+              },
+              required: ["title", "channel", "cleanNotes", "punchline", "questions"]
+            }
+          }
+        };
+
+        const res = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (jsonText) {
+          const parsed = JSON.parse(jsonText);
+          if (parsed.title) document.getElementById('input-title').value = parsed.title;
+          if (parsed.channel) document.getElementById('input-reference').value = parsed.channel + ` (${url})`;
+          if (parsed.cleanNotes) document.getElementById('input-fullnotes').value = parsed.cleanNotes;
+          if (parsed.punchline) document.getElementById('input-punchline').value = parsed.punchline;
+          if (parsed.questions) renderQuestionFields(parsed.questions);
+          showToast("Flash Récap généré avec succès ! 🎥");
+        } else {
+          throw new Error("No data");
+        }
+      } catch (e) {
+        const finalTitle = realTitle || (videoId ? `Vidéo YouTube (${videoId})` : "Vidéo YouTube");
+        const finalAuthor = realAuthor ? `${realAuthor} (${url})` : url;
+
+        document.getElementById('input-title').value = finalTitle;
+        document.getElementById('input-reference').value = finalAuthor;
+        document.getElementById('input-fullnotes').value = `🎯 EN BREF :\nAnalyse synthétique de "${finalTitle}".\n\n⚙️ POINTS CLÉS :\n• Thèse centrale défendue par ${realAuthor || 'la vidéo'}.\n• Éléments de preuve et démonstration.\n\n💡 EXEMPLE CONCRET :\nCas pratique et mise en situation illustrée dans la vidéo.\n\n⚠️ À RETENIR :\nL'action clé à retenir au quotidien.`;
+        document.getElementById('input-punchline').value = `L'essentiel de « ${finalTitle} » : une idée actionnable pour penser et agir différemment.`;
+        renderQuestionFields([
+          `Quel est le message central de "${finalTitle}" ?`,
+          `Quel exemple ou cas pratique illustre le mieux le propos ?`
+        ]);
+        showToast("Titre et fiche extraits avec succès !");
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = origText;
+      }
+    }
+
+    async function distillNotesWithAI() {
+      const fullText = document.getElementById('input-fullnotes').value.trim();
+      const title = document.getElementById('input-title').value.trim();
+      if (!fullText && !title) {
+        showToast("Renseigne au moins un titre ou des notes.");
+        return;
+      }
+
+      const btn = document.getElementById('btn-distill-ai');
+      const origText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-amber-300"></i><span>Nettoyage & Structuration...</span>`;
+
+      const systemPrompt = `Tu es un expert pédagogique. Réorganise, corrige l'orthographe et aère la note ("cleanNotes") selon cette structure claire avec des sauts de ligne systématiques :
+
+🎯 EN BREF :
+[Principe central expliqué simplement]
+
+⚙️ POINTS CLÉS :
+• [Point 1]
+• [Point 2]
+
+💡 EXEMPLE CONCRET :
+[Un exemple parlant du quotidien ou cas réel pour ancrer l'idée et ne pas rester dans l'abstrait]
+
+Crée également 1 punchline percutante ("punchline") et 2-3 questions variées pour la révision ("questions").`;
+
+      const userQuery = `Titre : ${title}\nNotes brutes : """${fullText || title}"""`;
+
+      try {
+        const apiKey = "";
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+        const payload = {
+          contents: [{ parts: [{ text: userQuery }] }],
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "OBJECT",
+              properties: {
+                cleanNotes: { type: "STRING" },
+                punchline: { type: "STRING" },
+                questions: { type: "ARRAY", items: { type: "STRING" } }
+              },
+              required: ["cleanNotes", "punchline", "questions"]
+            }
+          }
+        };
+
+        const res = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (jsonText) {
+          const parsed = JSON.parse(jsonText);
+          if (parsed.cleanNotes) document.getElementById('input-fullnotes').value = parsed.cleanNotes;
+          if (parsed.punchline) document.getElementById('input-punchline').value = parsed.punchline;
+          if (parsed.questions) renderQuestionFields(parsed.questions);
+          showToast("Notes nettoyées avec exemple et mise en page claire !");
+        }
+      } catch (e) {
+        // Fallback local structuré
+        const cleanFallback = `🎯 EN BREF :\n${title || 'Concept'}\n\n⚙️ POINTS CLÉS :\n• ${fullText.split('.')[0] || 'Idée principale'}.\n\n💡 EXEMPLE CONCRET :\nIllustration pratique du quotidien liée à ce sujet.`;
+        document.getElementById('input-fullnotes').value = cleanFallback;
+        document.getElementById('input-punchline').value = fullText.split('.')[0] || title;
+        renderQuestionFields([`Quel est l'essentiel de : ${title} ?`, `Quel exemple concret permet d'illustrer ce concept ?`]);
+        showToast("Mise en page effectuée");
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = origText;
+      }
+    }
+
+    function saveNote() {
+      const title = document.getElementById('input-title').value.trim();
+      const reference = document.getElementById('input-reference').value.trim();
+      const category = document.getElementById('select-category').value;
+      const subcategory = document.getElementById('select-subcategory').value;
+      const fullNotes = document.getElementById('input-fullnotes').value.trim();
+      const punchline = document.getElementById('input-punchline').value.trim();
+      const questionsList = getQuestionsFromForm();
+      const primaryQuestion = questionsList[0] || `Point clé de : ${title}`;
+
+      if (!title || !punchline) {
+        showToast("Titre et punchline obligatoires");
+        return;
+      }
+
+      if (editingNoteId) {
+        const note = notes.find(n => n.id === editingNoteId);
+        if (note) {
+          note.type = currentSourceType;
+          note.title = title;
+          note.reference = reference;
+          note.category = category;
+          note.subcategory = subcategory;
+          note.fullNotes = fullNotes;
+          note.punchline = punchline;
+          note.question = primaryQuestion;
+          note.questions = questionsList;
+        }
+        showToast("Fiche mise à jour");
+      } else {
+        const newNote = {
+          id: 'note-' + Date.now(),
+          type: currentSourceType,
+          title,
+          reference,
+          category,
+          subcategory,
+          fullNotes,
+          punchline,
+          question: primaryQuestion,
+          questions: questionsList,
+          quizOptions: [
+            punchline,
+            "Une interprétation opposée au principe fondamental",
+            "Un détail secondaire négligeable"
+          ],
+          quizCorrectIndex: 0,
+          dueInDays: 0
+        };
+        notes.unshift(newNote);
+        showToast("Fiche enregistrée");
+      }
+
+      saveStateToStorage();
+      closeNoteModal();
+      renderDashboard();
+      renderNotesList();
+    }
+
+    function editNote(id) {
+      openNoteModal(id);
+    }
+
+    function toggleMobileSimulator() {
+      isMobileSimulator = !isMobileSimulator;
+      const body = document.body;
+      const main = document.querySelector('main');
+      const aside = document.querySelector('aside');
+      const mobileNav = document.querySelector('nav.md\\:hidden');
+      const btnText = document.getElementById('simulator-btn-text');
+
+      if (isMobileSimulator) {
+        body.classList.add('p-4', 'bg-[#060709]', 'justify-center', 'items-center');
+        aside.classList.add('!hidden');
+        main.className = "w-full max-w-[390px] h-[780px] bg-[#0d0e12] rounded-[44px] border-[10px] border-zinc-800 shadow-2xl overflow-hidden flex flex-col relative transition-all";
+        if (mobileNav) mobileNav.classList.remove('md:hidden');
+        btnText.innerText = "Vue Ordinateur";
+      } else {
+        body.classList.remove('p-4', 'bg-[#060709]', 'justify-center', 'items-center');
+        aside.classList.remove('!hidden');
+        main.className = "flex-1 flex flex-col h-full overflow-hidden bg-[#0d0e12]";
+        if (mobileNav) mobileNav.classList.add('md:hidden');
+        btnText.innerText = "Vue Téléphone";
+      }
+    }
+
+    function getSourceIcon(type) {
+      if (type === 'youtube') return `<i class="fa-brands fa-youtube text-red-400"></i>`;
+      if (type === 'book') return `<i class="fa-solid fa-book text-amber-300"></i>`;
+      if (type === 'ai') return `<i class="fa-solid fa-robot text-brand-400"></i>`;
+      return `<i class="fa-solid fa-lightbulb text-indigo-400"></i>`;
+    }
+
+    function updateDueBadges() {
+      const count = notes.length;
+      const bDesktop = document.getElementById('badge-due-count');
+      const bMobile = document.getElementById('mobile-badge-due');
+      if (bDesktop) bDesktop.innerText = count;
+      if (bMobile) bMobile.innerText = count;
+    }
+
+    function showToast(text) {
+      const toast = document.getElementById('toast-msg');
+      const txt = document.getElementById('toast-text');
+      txt.innerText = text;
+      toast.classList.remove('-translate-y-16', 'opacity-0', 'pointer-events-none');
+      setTimeout(() => {
+        toast.classList.add('-translate-y-16', 'opacity-0', 'pointer-events-none');
+      }, 2500);
+    }
+
+    // GESTION SYNCHRO / SAUVEGARDE
+    function openSyncModal() {
+      document.getElementById('sync-modal').classList.remove('hidden');
+    }
+
+    function closeSyncModal() {
+      document.getElementById('sync-modal').classList.add('hidden');
+    }
+
+    function exportDataToFile() {
+      const backupData = {
+        taxonomy,
+        notes,
+        exportedAt: new Date().toISOString()
+      };
+      const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `synapse-notes-backup-${new Date().toISOString().slice(0,10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast("Sauvegarde téléchargée ! 💾");
+    }
+
+    function importDataFromFile(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const imported = JSON.parse(e.target.result);
+          if (imported.notes && imported.taxonomy) {
+            notes = imported.notes;
+            taxonomy = imported.taxonomy;
+            saveStateToStorage();
+            initCategoriesUI();
+            renderDashboard();
+            renderNotesList();
+            closeSyncModal();
+            showToast("Toutes tes fiches ont été importées ! ✅");
+          } else {
+            showToast("Format de fichier non reconnu.");
+          }
+        } catch (err) {
+          showToast("Erreur lors de la lecture du fichier.");
+        }
+      };
+      reader.readAsText(file);
+    }
+  </script>
+</body>
+</html>
