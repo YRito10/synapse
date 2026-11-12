@@ -798,11 +798,13 @@
             <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-[10px] text-brand-400 hover:underline">Obtenir une clé gratuite ↗</a>
           </div>
           <div class="flex items-center space-x-2">
-            <input type="password" id="gemini-api-key-input" placeholder="Coller votre clé AIzaSy..." class="w-full bg-[#15161c] border border-zinc-800 rounded-lg px-3 py-2 text-white font-mono text-[11px] focus:outline-none focus:border-brand-500">
+            <input type="password" id="gemini-api-key-input" placeholder="Coller votre clé (AIzaSy... ou AQ...)" class="w-full bg-[#15161c] border border-zinc-800 rounded-lg px-3 py-2 text-white font-mono text-[11px] focus:outline-none focus:border-brand-500">
             <button onclick="saveGeminiApiKey()" class="px-3 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-lg font-bold shrink-0 transition text-[11px]">
               Sauver
             </button>
           </div>
+          <p class="text-[11px] text-zinc-500">Compatible avec les clés Google AI Studio (AIzaSy...) et Google Cloud (AQ...).</p>
+        </div>
           <p class="text-[11px] text-zinc-500">Nécessaire uniquement lorsque l'application est hébergée sur GitHub pour activer la génération IA réelle.</p>
         </div>
 
@@ -1019,7 +1021,52 @@
       if (!input) return;
       const val = input.value.trim();
       localStorage.setItem('synapse_gemini_api_key', val);
-      showToast(val ? "Clé API Gemini enregistrée ! ✨" : "Clé API supprimée.");
+      showToast(val ? "Clé API enregistrée et active ! ✨" : "Clé API supprimée.");
+    }
+
+    // Fonction universelle d'appel à Gemini (Compatible clés AIzaSy... et AQ...)
+    async function callGeminiJSON(promptText, schemaObj) {
+      const apiKey = getGeminiApiKey();
+      if (!apiKey) {
+        throw new Error("NO_API_KEY");
+      }
+
+      const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash"];
+      let lastError = null;
+
+      for (const modelName of modelsToTry) {
+        try {
+          const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
+          const payload = {
+            contents: [{ parts: [{ text: promptText }] }],
+            generationConfig: {
+              responseMimeType: "application/json",
+              responseSchema: schemaObj
+            }
+          };
+
+          const res = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+
+          const data = await res.json();
+          if (!res.ok) {
+            lastError = data?.error?.message || `Erreur HTTP ${res.status}`;
+            continue;
+          }
+
+          const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (jsonText) {
+            return JSON.parse(jsonText);
+          }
+        } catch (err) {
+          lastError = err.message;
+        }
+      }
+
+      throw new Error(lastError || "Échec de l'appel IA");
     }
 
     function copySyncId() {
@@ -2101,81 +2148,73 @@ Génère en JSON :
 5. "questions": 2 à 3 questions de révision variées`;
 
       try {
-        const apiKey = getGeminiApiKey();
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-
-        const payload = {
-          contents: [{ parts: [{ text: contextualizedPrompt }] }],
-          generationConfig: {
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: "OBJECT",
-              properties: {
-                title: { type: "STRING" },
-                channel: { type: "STRING" },
-                cleanNotes: { type: "STRING" },
-                punchline: { type: "STRING" },
-                questions: { type: "ARRAY", items: { type: "STRING" } }
-              },
-              required: ["title", "channel", "cleanNotes", "punchline", "questions"]
-            }
-          }
+        const schema = {
+          type: "OBJECT",
+          properties: {
+            title: { type: "STRING" },
+            authorOrOrigin: { type: "STRING" },
+            cleanNotes: { type: "STRING" },
+            punchline: { type: "STRING" },
+            suggestedSubcategory: { type: "STRING" },
+            questions: { type: "ARRAY", items: { type: "STRING" } }
+          },
+          required: ["title", "authorOrOrigin", "cleanNotes", "punchline", "questions"]
         };
 
-        const res = await fetch(apiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        if (!res.ok) throw new Error("API Key missing or error");
-
-        const data = await res.json();
-        const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (jsonText) {
-          const parsed = JSON.parse(jsonText);
+        const parsed = await callGeminiJSON(promptMsg, schema);
+        if (parsed) {
           if (parsed.title) document.getElementById('input-title').value = parsed.title;
-          if (parsed.channel) document.getElementById('input-reference').value = url ? `${parsed.channel} (${url})` : parsed.channel;
+          if (parsed.authorOrOrigin) document.getElementById('input-reference').value = parsed.authorOrOrigin;
           if (parsed.cleanNotes) document.getElementById('input-fullnotes').value = parsed.cleanNotes;
           if (parsed.punchline) document.getElementById('input-punchline').value = parsed.punchline;
           if (parsed.questions) renderQuestionFields(parsed.questions);
-          showToast("Analyse IA de la vidéo réussie ! 🎥✨");
-        } else {
-          throw new Error("No data");
+
+          // Ajuster la catégorie et sous-catégorie si possible
+          if (taxonomy["IA & Concepts"]) {
+            document.getElementById('select-category').value = "IA & Concepts";
+            updateSubcategoriesSelect();
+            if (parsed.suggestedSubcategory && !taxonomy["IA & Concepts"].includes(parsed.suggestedSubcategory)) {
+              taxonomy["IA & Concepts"].push(parsed.suggestedSubcategory);
+              saveStateToStorage();
+              updateSubcategoriesSelect();
+            }
+            if (parsed.suggestedSubcategory) {
+              document.getElementById('select-subcategory').value = parsed.suggestedSubcategory;
+            }
+          }
+
+          showToast(`Fiche générée sur « ${parsed.title || topic} » ✨`);
         }
       } catch (e) {
-        const finalTitle = realTitle || (videoId ? `Vidéo YouTube (${videoId})` : "Vidéo YouTube");
-        const finalAuthor = realAuthor ? (url ? `${realAuthor} (${url})` : realAuthor) : url;
+        if (e.message !== "NO_API_KEY") {
+          console.warn("Détail erreur API Gemini:", e.message);
+          showToast(`Erreur API : ${e.message.slice(0, 60)}...`);
+        }
+        // Fallback intelligent structuré et concret avec exemple
+        const formattedFallback = `🎯 EN BREF :
+Le ${topic} propose une grille de lecture simple pour comprendre un phénomène précis.
 
-        document.getElementById('input-title').value = finalTitle;
-        document.getElementById('input-reference').value = finalAuthor;
+⚙️ COMMENT ÇA FONCTIONNE :
+• Déclencheur : une situation de départ qui nécessite une réaction.
+• Mécanisme : les choix des acteurs influencent l'issue finale.
 
-        // Extraction locale intelligente si l'utilisateur a collé la transcription sans clé API
-        if (rawTranscript.length > 40) {
-          const sentences = rawTranscript
-            .replace(/\d{1,2}:\d{2}/g, '') // Nettoyer les timecodes (ex: 02:15)
-            .split(/[.!?]+/)
-            .map(s => s.trim())
-            .filter(s => s.length > 35 && s.length < 220);
+💡 EXEMPLE CONCRET DU QUOTIDIEN :
+Imagine une situation courante où chacun attend que l'autre agisse : le ${topic} montre comment coordonner les actions pour débloquer l'ensemble.
 
-          const pt1 = sentences[0] || "Premier point clé abordé dans la vidéo.";
-          const pt2 = sentences[Math.floor(sentences.length * 0.4)] || "Développement principal de l'argumentation.";
-          const pt3 = sentences[Math.floor(sentences.length * 0.75)] || "Conclusion pratique de la présentation.";
+⚠️ LA NUANCE / LE PIÈGE :
+Ne pas réduire cette approche à un cas isolé, mais l'envisager comme un système global.`;
 
-          document.getElementById('input-fullnotes').value = `🎯 EN BREF :\nSynthèse extraite de la transcription de "${finalTitle}".\n\n⚙️ POINTS CLÉS EXTRAITS :\n• ${pt1}.\n• ${pt2}.\n• ${pt3}.\n\n💡 EXEMPLE / PASSAGE MARQUANT :\n"${sentences[1] || pt1}."\n\n⚠️ ASTUCE :\nAjoute ta clé API Gemini gratuite dans "Synchro Cloud" pour une synthèse IA complète.`;
-          document.getElementById('input-punchline').value = `${pt1}.`;
-          renderQuestionFields([
-            `Quelle est l'idée principale développée dans "${finalTitle}" ?`,
-            `Quel argument clé ressort de cette vidéo de ${realAuthor || 'la chaîne'} ?`
-          ]);
-          showToast("Transcription analysée et structurée ! 📝");
-        } else {
-          document.getElementById('input-fullnotes').value = `🎯 EN BREF :\nVidéo "${finalTitle}" par ${realAuthor || 'YouTube'}.\n\n⚙️ POINTS CLÉS :\n• [Complète ici ou colle la transcription de la vidéo au-dessus]\n\n💡 INFO IA :\nPour que l'IA analyse automatiquement n'importe quelle vidéo sur GitHub, ajoute ta clé API gratuite dans "Synchro Cloud" en haut à droite.`;
-          document.getElementById('input-punchline').value = `L'essentiel à retenir de « ${finalTitle} ».`;
-          renderQuestionFields([
-            `Quel est le message central de "${finalTitle}" ?`
-          ]);
-          showToast("Titre récupéré ! Ajoute ta clé API dans Synchro Cloud pour l'analyse IA.", "info");
+        document.getElementById('input-title').value = topic.charAt(0).toUpperCase() + topic.slice(1);
+        document.getElementById('input-reference').value = "Concept théorique";
+        document.getElementById('input-fullnotes').value = formattedFallback;
+        document.getElementById('input-punchline').value = `${topic} : comprendre les rouages fondamentaux pour agir efficacement dans le monde réel.`;
+        renderQuestionFields([
+          `Quel est le principe de base de : ${topic} ?`,
+          `Quel exemple du quotidien illustre bien ${topic} ?`,
+          `Quel piège ou erreur classique faut-il éviter concernant ${topic} ?`
+        ]);
+        if (e.message === "NO_API_KEY") {
+          showToast("Fiche créée en mode local (ajoute ta clé API dans Synchro Cloud).");
         }
       } finally {
         btn.disabled = false;
@@ -2213,59 +2252,133 @@ Crée également 1 punchline percutante ("punchline") et 2-3 questions variées 
       const userQuery = `Titre : ${title}\nNotes brutes : """${fullText || title}"""`;
 
       try {
-        const apiKey = getGeminiApiKey();
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-
-        const payload = {
-          contents: [{ parts: [{ text: contextualizedPrompt }] }],
-          generationConfig: {
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: "OBJECT",
-              properties: {
-                title: { type: "STRING" },
-                channel: { type: "STRING" },
-                cleanNotes: { type: "STRING" },
-                punchline: { type: "STRING" },
-                questions: { type: "ARRAY", items: { type: "STRING" } }
-              },
-              required: ["title", "channel", "cleanNotes", "punchline", "questions"]
-            }
-          }
+        const schema = {
+          type: "OBJECT",
+          properties: {
+            title: { type: "STRING" },
+            channel: { type: "STRING" },
+            cleanNotes: { type: "STRING" },
+            punchline: { type: "STRING" },
+            questions: { type: "ARRAY", items: { type: "STRING" } }
+          },
+          required: ["title", "channel", "cleanNotes", "punchline", "questions"]
         };
 
-        const res = await fetch(apiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        const data = await res.json();
-        const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (jsonText) {
-          const parsed = JSON.parse(jsonText);
+        const parsed = await callGeminiJSON(contextualizedPrompt, schema);
+        if (parsed) {
           if (parsed.title) document.getElementById('input-title').value = parsed.title;
-          if (parsed.channel) document.getElementById('input-reference').value = parsed.channel + ` (${url})`;
+          if (parsed.channel) document.getElementById('input-reference').value = url ? `${parsed.channel} (${url})` : parsed.channel;
           if (parsed.cleanNotes) document.getElementById('input-fullnotes').value = parsed.cleanNotes;
           if (parsed.punchline) document.getElementById('input-punchline').value = parsed.punchline;
           if (parsed.questions) renderQuestionFields(parsed.questions);
-          showToast("Flash Récap généré avec succès ! 🎥");
-        } else {
-          throw new Error("No data");
+          showToast("Analyse IA de la vidéo réussie ! 🎥✨");
         }
       } catch (e) {
+        if (e.message !== "NO_API_KEY") {
+          console.warn("Erreur API YouTube:", e.message);
+          showToast(`Info API : ${e.message.slice(0, 65)}`);
+        }
         const finalTitle = realTitle || (videoId ? `Vidéo YouTube (${videoId})` : "Vidéo YouTube");
-        const finalAuthor = realAuthor ? `${realAuthor} (${url})` : url;
+        const finalAuthor = realAuthor ? (url ? `${realAuthor} (${url})` : realAuthor) : url;
 
         document.getElementById('input-title').value = finalTitle;
         document.getElementById('input-reference').value = finalAuthor;
-        document.getElementById('input-fullnotes').value = `🎯 EN BREF :\nAnalyse synthétique de "${finalTitle}".\n\n⚙️ POINTS CLÉS :\n• Thèse centrale défendue par ${realAuthor || 'la vidéo'}.\n• Éléments de preuve et démonstration.\n\n💡 EXEMPLE CONCRET :\nCas pratique et mise en situation illustrée dans la vidéo.\n\n⚠️ À RETENIR :\nL'action clé à retenir au quotidien.`;
-        document.getElementById('input-punchline').value = `L'essentiel de « ${finalTitle} » : une idée actionnable pour penser et agir différemment.`;
-        renderQuestionFields([
-          `Quel est le message central de "${finalTitle}" ?`,
-          `Quel exemple ou cas pratique illustre le mieux le propos ?`
-        ]);
-        showToast("Titre et fiche extraits avec succès !");
+
+        // Extraction locale intelligente si l'utilisateur a collé la transcription sans clé API
+        if (rawTranscript.length > 40) {
+          const sentences = rawTranscript
+            .replace(/\d{1,2}:\d{2}/g, '') // Nettoyer les timecodes (ex: 02:15)
+            .split(/[.!?]+/)
+            .map(s => s.trim())
+            .filter(s => s.length > 35 && s.length < 220);
+
+          const pt1 = sentences[0] || "Premier point clé abordé dans la vidéo.";
+          const pt2 = sentences[Math.floor(sentences.length * 0.4)] || "Développement principal de l'argumentation.";
+          const pt3 = sentences[Math.floor(sentences.length * 0.75)] || "Conclusion pratique de la présentation.";
+
+          document.getElementById('input-fullnotes').value = `🎯 EN BREF :\nSynthèse extraite de la transcription de "${finalTitle}".\n\n⚙️ POINTS CLÉS EXTRAITS :\n• ${pt1}.\n• ${pt2}.\n• ${pt3}.\n\n💡 EXEMPLE / PASSAGE MARQUANT :\n"${sentences[1] || pt1}."\n\n⚠️ ASTUCE :\nVérifie ta clé API Gemini dans "Synchro Cloud" pour une synthèse IA complète.`;
+          document.getElementById('input-punchline').value = `${pt1}.`;
+          renderQuestionFields([
+            `Quelle est l'idée principale développée dans "${finalTitle}" ?`,
+            `Quel argument clé ressort de cette vidéo de ${realAuthor || 'la chaîne'} ?`
+          ]);
+          showToast("Transcription analysée et structurée ! 📝");
+        } else {
+          document.getElementById('input-fullnotes').value = `🎯 EN BREF :\nVidéo "${finalTitle}" par ${realAuthor || 'YouTube'}.\n\n⚙️ POINTS CLÉS :\n• [Complète ici ou colle la transcription de la vidéo au-dessus]\n\n💡 INFO IA :\nPour que l'IA analyse automatiquement n'importe quelle vidéo sur GitHub, vérifie ta clé API dans "Synchro Cloud" en haut à droite.`;
+          document.getElementById('input-punchline').value = `L'essentiel à retenir de « ${finalTitle} ».`;
+          renderQuestionFields([
+            `Quel est le message central de "${finalTitle}" ?`
+          ]);
+          if (e.message === "NO_API_KEY") {
+            showToast("Titre récupéré ! Ajoute ta clé API dans Synchro Cloud pour l'analyse IA.");
+          }
+        }
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = origText;
+      }
+    }
+
+    async function distillNotesWithAI() {
+      const fullText = document.getElementById('input-fullnotes').value.trim();
+      const title = document.getElementById('input-title').value.trim();
+      if (!fullText && !title) {
+        showToast("Renseigne au moins un titre ou des notes.");
+        return;
+      }
+
+      const btn = document.getElementById('btn-distill-ai');
+      const origText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-amber-300"></i><span>Nettoyage & Structuration...</span>`;
+
+      const promptText = `Tu es un expert pédagogique. Réorganise, corrige l'orthographe et aère la note ("cleanNotes") selon cette structure claire avec des sauts de ligne systématiques :
+
+🎯 EN BREF :
+[Principe central expliqué simplement]
+
+⚙️ POINTS CLÉS :
+• [Point 1]
+• [Point 2]
+
+💡 EXEMPLE CONCRET :
+[Un exemple parlant du quotidien ou cas réel pour ancrer l'idée et ne pas rester dans l'abstrait]
+
+Crée également 1 punchline percutante ("punchline") et 2-3 questions variées pour la révision ("questions").
+
+Titre : ${title}
+Notes brutes : """${fullText || title}"""`;
+
+      try {
+        const schema = {
+          type: "OBJECT",
+          properties: {
+            cleanNotes: { type: "STRING" },
+            punchline: { type: "STRING" },
+            questions: { type: "ARRAY", items: { type: "STRING" } }
+          },
+          required: ["cleanNotes", "punchline", "questions"]
+        };
+
+        const parsed = await callGeminiJSON(promptText, schema);
+        if (parsed) {
+          if (parsed.cleanNotes) document.getElementById('input-fullnotes').value = parsed.cleanNotes;
+          if (parsed.punchline) document.getElementById('input-punchline').value = parsed.punchline;
+          if (parsed.questions) renderQuestionFields(parsed.questions);
+          showToast("Notes nettoyées avec exemple et mise en page claire ! ✨");
+        }
+      } catch (e) {
+        if (e.message !== "NO_API_KEY") {
+          showToast(`Erreur API : ${e.message.slice(0, 60)}`);
+        }
+        // Fallback local structuré
+        const cleanFallback = `🎯 EN BREF :\n${title || 'Concept'}\n\n⚙️ POINTS CLÉS :\n• ${fullText.split('.')[0] || 'Idée principale'}.\n\n💡 EXEMPLE CONCRET :\nIllustration pratique du quotidien liée à ce sujet.`;
+        document.getElementById('input-fullnotes').value = cleanFallback;
+        document.getElementById('input-punchline').value = fullText.split('.')[0] || title;
+        renderQuestionFields([`Quel est l'essentiel de : ${title} ?`, `Quel exemple concret permet d'illustrer ce concept ?`]);
+        if (e.message === "NO_API_KEY") {
+          showToast("Mise en page effectuée (mode local)");
+        }
       } finally {
         btn.disabled = false;
         btn.innerHTML = origText;
